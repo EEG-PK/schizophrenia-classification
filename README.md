@@ -41,3 +41,6 @@ What we use: frameworks, versions, etc.
 ### Task 2: Schizophrenia prediction
 
 
+## Installing dependencies
+To install all required dependencies run 'pip install -r requirements.txt' in your python environment
+
