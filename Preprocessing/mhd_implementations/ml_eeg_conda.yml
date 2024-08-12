@@ -1,0 +1,12 @@
+name: ml_eeg
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - numpy=2.0.*
+  - scipy=1.14.*
+  - matplotlib=3.9.*
+  - pandas=2.2.*
+  - pip:
+    - tftb
