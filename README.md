@@ -41,3 +41,11 @@ What we use: frameworks, versions, etc.
 ### Task 2: Schizophrenia prediction
 
 
+## Installing dependencies
+It was tested with python3.12<br>
+To install all required dependencies run:
+- Virtual env <br>
+`pip install -r requirements.txt` (in your python environment)
+<br>
+- Conda <br>
+`conda env create -n [env_name] --file [env_file.yml]` (to create conda environment)
