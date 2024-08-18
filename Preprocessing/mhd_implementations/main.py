@@ -8,6 +8,7 @@ from mhd_implementations import (
     margenau_hill_distribution_spectrogram_tfrmhs,
     margenau_hill_distribution,
     pseudo_margenau_hill_distribution,
+    margenau_hill_distribution_spectrogram_tfrmhs_ifft,
 )
 
 def margenau_hill_preparation(mhd: np.ndarray, ts: np.ndarray) -> Tuple[np.ndarray, Tuple[float, float, float, float]]:
@@ -72,6 +73,9 @@ shortened_signal = eeg_data[0, :shortened_signal_len]
 mhd_tfrmhs, extent_tfrmhs = use_mhd(shortened_signal, margenau_hill_distribution_spectrogram_tfrmhs)
 mhd_plot(mhd_tfrmhs, extent_tfrmhs)
 
+mhd_tfrmhs_ifft, extent_tfrmhs_ifft = use_mhd(shortened_signal, margenau_hill_distribution_spectrogram_tfrmhs_ifft)
+mhd_plot(mhd_tfrmhs_ifft, extent_tfrmhs_ifft)
+
 mhd_tftb, extent_tftb = use_mhd(shortened_signal, margenau_hill_distribution)
 mhd_plot(mhd_tftb, extent_tftb)
 
@@ -81,6 +85,10 @@ mhd_plot(pmhd_tftb, p_extent_tftb)
 # Convert MHD to image
 mhd_tfrmhs_image = convert_to_image(mhd_tfrmhs, flip=True)
 plt.imshow(mhd_tfrmhs_image, aspect='auto', cmap='gray', extent=extent_tfrmhs)
+plt.show()
+
+mhd_tfrmhs_ifft_image = convert_to_image(mhd_tfrmhs_ifft, flip=True)
+plt.imshow(mhd_tfrmhs_ifft_image, aspect='auto', cmap='gray', extent=extent_tfrmhs_ifft)
 plt.show()
 
 mhd_tftb_image = convert_to_image(mhd_tftb, flip=True)
