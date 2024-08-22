@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import mne
-from scipy.signal import stft, spectrogram
+from tftb.processing import MargenauHillDistribution
 import matplotlib.pyplot as plt
 
 
@@ -32,20 +32,42 @@ def preprocessing_data_set_eeg(data, sfreq=128, channels_names=None):
     return data
 
 
-def plot_stft(signal, sfreq=128, nperseg=256, noverlap=128, output_path=None):
-    f, t, Zxx = stft(signal, fs=sfreq, nperseg=nperseg, noverlap=noverlap)
-    plt.figure(figsize=(10, 6))
-    plt.pcolormesh(t, f, np.abs(Zxx), shading='gouraud')
-    plt.ylabel('Frequency [Hz]')
-    plt.xlabel('Time [sec]')
-    plt.ylim(0, 60)  # 60 Hz
-    plt.colorbar(label='Magnitude')
+def scale_minmax(X, min=0.0, max=1.0):
+    X_std = (X - X.min()) / (X.max() - X.min())
+    X_scaled = X_std * (max - min) + min
+    return X_scaled
+
+
+def convert_to_image(mh_distribution, flip=True):
+    img = scale_minmax(mh_distribution, 0, 255).astype(np.uint8)
+    if flip:
+        img = np.flip(img, axis=0)
+    img = 255 - img 
+    return img
+
+
+def margenau_hill_distribution_image(signal, output_path=None):
+    tfr_real = MargenauHillDistribution(signal)
+    tfr_real.run()
+
+    threshold = 0.05
+    tfr_real.tfr = tfr_real.tfr[:(tfr_real.tfr.shape[0] // 2), :]
+    _threshold = np.amax(tfr_real.tfr) * threshold
+    tfr_real.tfr[tfr_real.tfr <= _threshold] = 0.0
+    extent = (0, tfr_real.ts.max(), 0, 0.5)
+
+    image = convert_to_image(tfr_real.tfr, flip=False)
+
+    plt.imshow(image, aspect='auto', cmap='gray', origin='lower', extent=extent)
 
     if output_path:
         plt.savefig(output_path)
         plt.close()
+        print(f"Zapisano obraz do: {output_path}")
     else:
         plt.show()
+
+    return image
 
 
 def process_all_files_in_folder(input_folder_path, output_folder_path):
@@ -56,12 +78,9 @@ def process_all_files_in_folder(input_folder_path, output_folder_path):
         if filename.endswith('.eea'):
             file_path = os.path.join(input_folder_path, filename)
             eeg_data = read_eea(file_path)
-
             processed_data = preprocessing_data_set_eeg(eeg_data)
-
             output_file_path = os.path.join(output_folder_path, f"{os.path.splitext(filename)[0]}.png")
-            plot_stft(processed_data[0, :], output_path=output_file_path)
-            print(f"Zapisano obraz do: {output_file_path}")
+            margenau_hill_distribution_image(processed_data[0, :], output_path=output_file_path)
 
 
 if __name__ == "__main__":
