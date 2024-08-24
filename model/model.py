@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import List, Tuple
 
 import optuna
 import tensorflow as tf
@@ -6,9 +6,9 @@ from tensorflow.keras.regularizers import l2
 
 
 def create_model(
-    trial: optuna.Trial,
-    input_shape: Tuple[int, int, int],
-    debug: bool = False
+        trial: optuna.Trial,
+        input_shape: Tuple[int, int, int],
+        debug: bool = False
 ) -> tf.keras.Model:
     """
     Creates a time-distributed LSTM-CNN model based on hyperparameters suggested by Optuna.
@@ -30,28 +30,29 @@ def create_model(
     height, width = input_shape[0], input_shape[1]
 
     for i in range(n_conv_layers):
-        filters = trial.suggest_int(f'filters_{i+1}', 16, 128, step=16)
+        filters = trial.suggest_int(f'filters_{i + 1}', 16, 128, step=16)
 
         max_filter_size = min(height, width) // 2
         if max_filter_size < 2:
-            raise optuna.exceptions.TrialPruned(f"Filter size is too large for the current dimensions at layer {i+1}.")
-        filter_size = trial.suggest_int(f'filter_size_{i+1}', 2, max_filter_size)
-        strides_conv = trial.suggest_int(f'strides_conv_{i+1}', 1, 2)
+            raise optuna.exceptions.TrialPruned(
+                f"Filter size is too large for the current dimensions at layer {i + 1}.")
+        filter_size = trial.suggest_int(f'filter_size_{i + 1}', 2, max_filter_size)
+        strides_conv = trial.suggest_int(f'strides_conv_{i + 1}', 1, 2)
 
         height = (height - filter_size) // strides_conv + 1
         width = (width - filter_size) // strides_conv + 1
 
         if height <= 0 or width <= 0:
-            raise optuna.exceptions.TrialPruned(f"Invalid dimensions after Conv2D at layer {i+1}.")
+            raise optuna.exceptions.TrialPruned(f"Invalid dimensions after Conv2D at layer {i + 1}.")
 
-        pool_size = trial.suggest_int(f'pool_size_{i+1}', 2, 3)
-        strides_pool = trial.suggest_int(f'strides_pool_{i+1}', 1, 2)
+        pool_size = trial.suggest_int(f'pool_size_{i + 1}', 2, 3)
+        strides_pool = trial.suggest_int(f'strides_pool_{i + 1}', 1, 2)
 
         height = (height - pool_size) // strides_pool + 1
         width = (width - pool_size) // strides_pool + 1
 
         if height <= 0 or width <= 0:
-            raise optuna.exceptions.TrialPruned(f"Invalid dimensions after MaxPooling at layer {i+1}.")
+            raise optuna.exceptions.TrialPruned(f"Invalid dimensions after MaxPooling at layer {i + 1}.")
 
         filters_list.append(filters)
         filter_size_list.append(filter_size)
@@ -81,16 +82,47 @@ def create_model(
 
 
 def create_time_distributed_lstm_cnn(input_shape: Tuple[int, int, int],
-                                     n_conv_layers, filters_list, filter_size_list,
-                                     strides_conv_list, pool_size_list, strides_pool_list, lstm_units,
-                                     dropout_rate, l2_reg,
-                                     debug=False) -> tf.keras.Model:
+                                     n_conv_layers: int,
+                                     filters_list: List[int],
+                                     filter_size_list: List[int],
+                                     strides_conv_list: List[int],
+                                     pool_size_list: List[int],
+                                     strides_pool_list: List[int],
+                                     lstm_units: int,
+                                     dropout_rate: float,
+                                     l2_reg: float,
+                                     debug: bool = False) -> tf.keras.Model:
     """
-    Creates a Time-Distributed CNN-LSTM model for processing EEG signal segments,
-    with hyperparameters optimized by Optuna
+    Creates a Time-Distributed CNN-LSTM model for processing EEG signal segments.
 
-    :param input_shape: Tuple representing the shape of a single EEG segment (width, height, channels).
-    :param debug: Boolean to enable/disable debug print statements.
+    This model architecture is designed to process EEG data that has been segmented into
+    smaller time windows. It first applies a series of convolutional and pooling layers,
+    wrapped in TimeDistributed layers to preserve the temporal structure, followed by
+    an LSTM layer to capture sequential dependencies. The final output is a binary
+    classification.
+
+    :param input_shape:
+        A tuple representing the shape of a single EEG segment (height, width, channels).
+    :param n_conv_layers:
+        The number of convolutional layers in the model.
+    :param filters_list:
+        A list of integers where each integer represents the number of filters in the corresponding convolutional layer.
+    :param filter_size_list:
+        A list of integers where each integer represents the filter size for the corresponding convolutional layer.
+    :param strides_conv_list:
+        A list of integers where each integer represents the stride length for the corresponding convolutional layer.
+    :param pool_size_list:
+        A list of integers where each integer represents the pool size for the corresponding max-pooling layer.
+    :param strides_pool_list:
+        A list of integers where each integer represents the stride length for the corresponding max-pooling layer.
+    :param lstm_units:
+        The number of units in the LSTM layer.
+    :param dropout_rate:
+        The dropout rate applied after the LSTM layer to prevent overfitting.
+    :param l2_reg:
+        The L2 regularization factor applied to the kernel weights of the convolutional layers.
+    :param debug:
+        A boolean flag to enable or disable debug print statements.
     :return: A compiled Keras Model ready for training.
     """
     inputs = tf.keras.Input(shape=(None, *input_shape))
