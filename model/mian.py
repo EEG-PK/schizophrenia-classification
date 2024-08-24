@@ -3,7 +3,7 @@ from optuna.trial import TrialState
 from mockup_data import mockup
 from training import objective
 
-# Taki mockup danych na ten moment
+# Data mock-up for now
 data_dir = 'model/data'
 schizophrenia_files = ['33w1.eea', '088w1.eea', '103w.eea']
 health_files = ['088w1.eea', '103w.eea']
@@ -11,7 +11,12 @@ health_files = ['088w1.eea', '103w.eea']
 mockup(data_dir, schizophrenia_files, health_files)
 
 
-def show_result(study):
+def show_result(study: optuna.Study) -> None:
+    """
+    Display the results of the Optuna study, including statistics about the trials and the best trial.
+
+    :param study: The Optuna study containing the results of the optimization.
+    """
     pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
     complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
 
@@ -42,8 +47,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# study = optuna.create_study(direction='maximize')
-# study.optimize(objective, n_trials=50)
-# print(f"Best trial: {study.best_trial.value}")
-# print("Best hyperparameters: {}".format(study.best_trial.params))

@@ -5,7 +5,24 @@ import tensorflow as tf
 from tensorflow.keras.regularizers import l2
 
 
-def create_model(trial, input_shape, debug=False):
+def create_model(
+    trial: optuna.Trial,
+    input_shape: Tuple[int, int, int],
+    debug: bool = False
+) -> tf.keras.Model:
+    """
+    Creates a time-distributed LSTM-CNN model based on hyperparameters suggested by Optuna.
+
+    This function uses the `trial` object from Optuna to suggest hyperparameters for the convolutional layers,
+    pooling layers, and the LSTM layer. It also ensures that the dimensions after each convolution and pooling
+    operation are valid. If dimensions become invalid, the trial is pruned.
+
+    :param trial: The Optuna trial object used to suggest hyperparameters.
+    :param input_shape: The shape of the input data, specified as (height, width, channels).
+    :param debug: A flag to indicate if debug mode is enabled. Defaults to False.
+    :return: A compiled Keras model with the suggested hyperparameters.
+    :raises optuna.exceptions.TrialPruned: If the dimensions after convolution or pooling become invalid.
+    """
     n_conv_layers = trial.suggest_int('n_conv_layers', 1, 5)
     filters_list, filter_size_list, strides_conv_list = [], [], []
     pool_size_list, strides_pool_list = [], []
@@ -77,18 +94,6 @@ def create_time_distributed_lstm_cnn(input_shape: Tuple[int, int, int],
     :return: A compiled Keras Model ready for training.
     """
     inputs = tf.keras.Input(shape=(None, *input_shape))
-
-    # Hyperparameters from Optuna
-    # n_conv_layers = trial.suggest_int('n_conv_layers', 1, 8)
-    # filters_list = [trial.suggest_int(f'filters_{i+1}', 16, 128, step=16) for i in range(n_conv_layers)]
-    # filter_size_list = [trial.suggest_int(f'filter_size_{i+1}', 2, 5) for i in range(n_conv_layers)]
-    # strides_conv_list = [trial.suggest_int(f'strides_conv_{i+1}', 1, 2) for i in range(n_conv_layers)]
-    # pool_size_list = [trial.suggest_int(f'pool_size_{i+1}', 2, 3) for i in range(n_conv_layers)]
-    # strides_pool_list = [trial.suggest_int(f'strides_pool_{i+1}', 1, 2) for i in range(n_conv_layers)]
-    # lstm_units = trial.suggest_int('lstm_units', 64, 256, step=64)
-    # dropout_rate = trial.suggest_float('dropout_rate', 0.1, 0.5)
-    # l2_reg = trial.suggest_float('l2_reg', 1e-5, 1e-2, log=True)
-
     x = inputs
 
     if debug:
