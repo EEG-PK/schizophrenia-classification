@@ -1,28 +1,11 @@
-from typing import List, Dict, Any, Union, Tuple
+from typing import List, Dict, Any, Tuple
 import numpy as np
-import pandas as pd
 import tensorflow as tf
 import joblib
 
-from mhd_temp import margenau_hill_distribution_spectrogram_tfrmhs_ifft
-from params import SEGMENT_SIZE_SEC, SAMPLING_RATE, SEGMENT_WIDTH, SEGMENT_HEIGHT, CHANNEL_NUMBER
-
-
-# Temp function - to remove
-def read_eeg_data(file_path):
-    df = pd.read_csv(file_path, header=None, sep=r'\s+')
-    num_samples_per_channel = 7680
-    num_channels = 16
-
-    # Podział danych na poszczególne kanały
-    channels = []
-    for i in range(num_channels):
-        start_index = i * num_samples_per_channel
-        end_index = (i + 1) * num_samples_per_channel
-        channel_data = df.iloc[start_index:end_index, 0].values
-        channels.append(channel_data)
-
-    return channels
+# TODO: Replace the mhd function
+from mhd_temp import margenau_hill_distribution_spectrogram_tfrmhs_ifft as mhd
+from params import SEGMENT_SIZE_SEC, SAMPLING_RATE, SEGMENT_COLUMNS, SEGMENT_ROWS, CHANNEL_NUMBER
 
 
 def load_eeg_data(filepath: str) -> List[Dict[str, Any]]:
@@ -112,19 +95,23 @@ def signal_to_image(signal: np.ndarray) -> np.ndarray:
     Converts a 1D signal into a 2D image using the Margenau-Hill distribution.
 
     The signal is transformed into an image representation using the
-    Margenau-Hill distribution, scaled to a range of 0-255, flipped and inverted.
+    Margenau-Hill distribution, scaled to a range of 0-1.
 
     :param signal: A 1D numpy array representing the EEG signal for a single channel.
     :return: A 2D numpy array of type uint8, representing the signal as an image.
 
     Note:
-        - The image is flipped vertically.
-        - The color is inverted (0 becomes 255, and 255 becomes 0).
+        - Mirror frequencies are cropped (N/2, N)
     """
-    mh_distribution, ts = margenau_hill_distribution_spectrogram_tfrmhs_ifft(signal)
-    img = scale_minmax(mh_distribution, 0, 255).astype(np.uint8)
-    img = np.flip(img, axis=0)
-    img = 255 - img
+    mh_distribution, ts = mhd(signal)
+    mh_distribution = abs(mh_distribution)
+    mh_distribution = mh_distribution[:(mh_distribution.shape[0] // 2), :]
+
+    img = scale_minmax(mh_distribution, 0, 1)
+    # I think that further conversion is not needed since we do not use pretreated image models
+    # img = scale_minmax(mh_distribution, 0, 255).astype(np.uint8)
+    # img = np.flip(img, axis=0)
+    # img = 255 - img
     return img
 
 
@@ -173,7 +160,7 @@ def create_eeg_dataset(data: List[Dict[str, np.ndarray]], batch_size: int, shuff
             yield frames, label
 
     output_signature = (
-        tf.TensorSpec(shape=(None, SEGMENT_WIDTH, SEGMENT_HEIGHT, CHANNEL_NUMBER), dtype=tf.float32),
+        tf.TensorSpec(shape=(None, SEGMENT_ROWS, SEGMENT_COLUMNS, CHANNEL_NUMBER), dtype=tf.float32),
         tf.TensorSpec(shape=(), dtype=tf.int32)
     )
 
