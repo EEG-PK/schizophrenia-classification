@@ -1,14 +1,8 @@
 from converter import *
 from plotter import plot_signal
+from joblib import dump, load
 
-# signals = get_signals_from_edf("h01.edf")
+signals = get_signals_from_csv('CsvData/25 trimmed.csv')
 
-# print(signals)
-
-result = math.log(250, 2)
-
-result_int = int(result)
-
-# if numbers are not the same it means that in log function is reminder
-# which means that number is not the power of two
-print(result == result_int)
+for signal in signals:
+   process_folder('CsvData','csv')
