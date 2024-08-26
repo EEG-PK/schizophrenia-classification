@@ -1,12 +1,14 @@
 from converter import *
 from plotter import plot_signal
 
-signals = get_signals_from_edf("h01.edf")
-filtered = lowpass_filter(signals, 250)
-resampled = resample_signal(filtered, 250)
-split_into_time_windows(resampled['Fp1'], 128)
+# signals = get_signals_from_edf("h01.edf")
 
-gen = split_into_time_windows(resampled['Fp1'], 128)
-values = next(gen)
-margenau = calculate_margenau_lib(values)
-plot_signal(margenau)
+# print(signals)
+
+result = math.log(250, 2)
+
+result_int = int(result)
+
+# if numbers are not the same it means that in log function is reminder
+# which means that number is not the power of two
+print(result == result_int)
