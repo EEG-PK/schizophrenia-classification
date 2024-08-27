@@ -3,7 +3,7 @@ import math
 import mne
 import pandas as pd
 from mne.io import read_raw_edf
-from typing import List, Literal
+from typing import List, Literal, Generator
 
 from mne.io.edf.edf import RawEDF
 from scipy.signal import resample_poly, decimate
@@ -15,7 +15,7 @@ import os
 common_channels = ['F8', 'O2', 'F7', 'O1', 'F4', 'C4', 'P4', 'F3', 'C3', 'P3', 'Cz', 'Pz']
 
 
-def get_signals_from_csv(filename: str, sample_frequency: int = 1024) -> mne.io.RawArray:
+def get_signals_from_csv(filename: str, sample_frequency: int = 1024) -> Generator[mne.io.RawArray, None, None]:
     """
     Creates generator for csv file. File is split into 3072 rows chunks (one trial with one condition).
     Generator is preferred here so the RAM doesn't go boom :)
@@ -42,14 +42,14 @@ def get_signals_from_csv(filename: str, sample_frequency: int = 1024) -> mne.io.
         yield raw_data
 
 
-# TODO: implement
 def create_reference_electrode(signals: mne.io.RawArray | RawEDF) -> mne.io.RawArray | RawEDF:
-    forward = mne.make_forward_solution(
-        signals.info,
-        # TODO: read about transposition of this
-        trans=None,
-    )
-    eeg_data = mne.set_eeg_reference(signals, ref_channels='REST', forward=mne.make_forward_solution())
+    # signals.del_proj()  # remove our average reference projector first
+    # sphere = mne.make_sphere_model("auto", "auto", signals.info)
+    # src = mne.setup_volume_source_space(sphere=sphere, exclude=30.0, pos=15.0)
+    # forward = mne.make_forward_solution(signals.info, trans=None, src=src, bem=sphere)
+    # eeg_data = signals.copy().set_eeg_reference(ref_channels='REST', forward=forward)
+    eeg_data = signals.copy().set_eeg_reference(ref_channels='average')
+
     return eeg_data
 
 
@@ -68,17 +68,17 @@ def get_signals_from_eea(filename: str, measurements_per_channel: int = 7680,
         lines = file.readlines()
         if channels is None:
             # Order of this channel names are important, don't change it
-            channels_original = ['F7', 'F3', 'F4', 'F8', 'T3', 'C3', 'Cz', 'C4', 'T4', 'T5', 'P3', 'Pz', 'P4', 'T6',
-                                 'O1', 'O2']
+            channels = ['F7', 'F3', 'F4', 'F8', 'T3', 'C3', 'Cz', 'C4', 'T4', 'T5', 'P3', 'Pz', 'P4', 'T6',
+                        'O1', 'O2']
             # get a filtered channel names which are common in all datasets
-            channels_filtered = [channels_original[i] for i in channels_original if
-                                 channels_original[i] in common_channels]
+            channels_filtered = [channels[i] for i in range(len(channels)) if
+                                 channels[i] in common_channels]
 
         # we need to iterate through all values and skip those which are not common for all datasets
-        eeg_data = [lines[i:i + measurements_per_channel] for i in
-                    range(0, len(lines), measurements_per_channel) if channels_original[i] in common_channels]
+        eeg_data = [lines[i:i + measurements_per_channel] for enum_i, i in
+                    enumerate(range(0, len(lines), measurements_per_channel)) if channels[enum_i] in common_channels]
 
-        channel_types = ['eeg'] * len(channels)
+        channel_types = ['eeg'] * len(channels_filtered)
 
         info = mne.create_info(ch_types=channel_types, sfreq=sample_frequency, ch_names=channels_filtered)
         raw_data = mne.io.RawArray(eeg_data, info)
@@ -92,7 +92,7 @@ def get_signals_from_edf(filename: str) -> RawEDF:
     :param filename: Path to file. If file is in the project folder name is sufficient.
     :return: RawEDF with signals
     """
-    edf_data = read_raw_edf(filename)
+    edf_data = read_raw_edf(filename, preload=True)
     # drop all channels which aren't common for all dataset
     edf_data.drop_channels(set(edf_data.ch_names) - set(common_channels))
     return edf_data
@@ -110,8 +110,10 @@ def filter_mne(signals: mne.io.RawArray | RawEDF, cutoff_freq: int = 64) -> mne.
     return signals
 
 
-def save_to_pickle_file(signals: mne.io.RawArray | RawEDF, filename: str) -> None:
-    dump(dict(zip(signals.ch_names, signals.get_data())), filename)
+def save_to_pickle_file(signals: mne.io.RawArray | RawEDF, filename: str, folder_name: str) -> None:
+    if not os.path.exists(folder_name):
+        os.mkdir(folder_name)
+    dump(dict(zip(signals.ch_names, signals.get_data())), f"{folder_name}/{filename}")
 
 
 def resample_signal(signals: mne.io.RawArray | RawEDF, original_sample_rate: int,
@@ -125,51 +127,47 @@ def resample_signal(signals: mne.io.RawArray | RawEDF, original_sample_rate: int
     :param new_sample_rate: New sample rate of which we want make
     :return: Mne object with resampled signals
     """
-
-    def check_if_power_of_two() -> bool:
-        result = math.log(original_sample_rate, 2)
-
-        result_int = int(result)
-
-        # if numbers are not the same it means that in log function is reminder
-        # which means that number is not the power of two
-        return result == result_int
-
-    def resample_list(signal_list: List[float]):
-        """
-        Resample signal list using decimate/resample_poly
-
-        :param signal_list: Signal from one channel. Param should be a list of floats.
-        """
-        should_use_poly = check_if_power_of_two()
-        if should_use_poly:
-            gcd = np.gcd(original_sample_rate, new_sample_rate)
-
-            # Upsampling and downsampling factors
-            up = original_sample_rate // gcd
-            down = new_sample_rate // gcd
-
-            # Apply low-pass FIR filter and perform resampling using resample_poly
-            return resample_poly(signal_list, up, down)
-        else:
-            gcd = np.gcd(original_sample_rate, new_sample_rate)
-            down = new_sample_rate // gcd
-            # Apply low-pass FIR filter and perform resampling using resample_poly
-            return decimate(signal_list, down)
-
-    # function returns data | timestamps, timestamps are omitted (not used I guess)
-    eeg_data_list = signals.get_data()
-    channel_names = signals.ch_names
-
-    placeholder_data = []
-    for eeg_data in eeg_data_list:
-        placeholder_data.append(resample_list(eeg_data))
-
-    channel_types = ['eeg'] * len(channel_names)
-
-    info = mne.create_info(ch_types=channel_types, sfreq=new_sample_rate, ch_names=channel_names)
-    raw_data = mne.io.RawArray(placeholder_data, info)
-    return raw_data
+    # FIXME: currently using resample from mne bcs time window in manual resampling is longer up 4 times for some reason
+    signals.resample(new_sample_rate)
+    return signals
+    # def resample_list(signal_list: List[float]):
+    #     """
+    #     Resample signal list using decimate/resample_poly
+    #
+    #     :param signal_list: Signal from one channel. Param should be a list of floats.
+    #     """
+    #     should_use_poly = original_sample_rate % new_sample_rate != 0
+    #
+    #     if should_use_poly:
+    #         original_sample_rate_int = int(original_sample_rate)
+    #         gcd = np.gcd(original_sample_rate_int, new_sample_rate)
+    #
+    #         # Upsampling and downsampling factors
+    #         up = original_sample_rate // gcd
+    #         down = new_sample_rate // gcd
+    #
+    #         # Apply low-pass FIR filter and perform resampling using resample_poly
+    #         return resample_poly(signal_list, up, down)
+    #     else:
+    #         original_sample_rate_int = int(original_sample_rate)
+    #         gcd = np.gcd(original_sample_rate_int, new_sample_rate)
+    #         down = new_sample_rate // gcd
+    #         # Apply low-pass FIR filter and perform resampling using resample_poly
+    #         return decimate(signal_list, down)
+    #
+    # # function returns data | timestamps, timestamps are omitted (not used I guess)
+    # eeg_data_list = signals.get_data()
+    # channel_names = signals.ch_names
+    #
+    # placeholder_data = []
+    # for eeg_data in eeg_data_list:
+    #     placeholder_data.append(resample_list(eeg_data))
+    #
+    # channel_types = ['eeg'] * len(channel_names)
+    #
+    # info = mne.create_info(ch_types=channel_types, sfreq=new_sample_rate, ch_names=channel_names)
+    # raw_data = mne.io.RawArray(placeholder_data, info)
+    # return raw_data
 
 
 def scale_values(signals: mne.io.RawArray | RawEDF, min_val: float = 0, max_val: float = 1) -> mne.io.RawArray:
@@ -182,26 +180,44 @@ def scale_values(signals: mne.io.RawArray | RawEDF, min_val: float = 0, max_val:
     return raw_data
 
 
-def split_into_time_windows(signal: mne.io.RawArray, sample_frequency: int, secs: float = 3) -> List[float]:
+def split_into_time_windows(signals: mne.io.RawArray, sample_frequency: int, secs: float = 3) -> Generator[
+    mne.io.RawArray, None, None]:
     """
     Returns some time window from signal. It's generator for simplicity’s sake.
 
-    :param signal: Values from one channel.
+    :param signals: RawArray from mne with all signals
     :param sample_frequency: Frequency at which data is sampled.
     :param secs: By what time divide data
     :return: Signal from time chunk
     """
 
-    time = len(signal) / sample_frequency
+    data = signals.get_data()
+    time = len(data[0]) / sample_frequency
 
     chunks = int(time // 3)
 
-    data = signal.get_data()
+    for i in range(chunks - 1):
+        # [chunk_start : chunk_end]
+        chunk_start = int((secs * sample_frequency) * i)
+        chunk_end = int((secs * sample_frequency) * (i + 1))
+        mapped_data = list(map(lambda x: x[chunk_start:chunk_end], data))
+        info = mne.create_info(
+            ch_types=signals.get_channel_types(),
+            sfreq=signals.info['sfreq'],
+            ch_names=signals.ch_names)
+        raw_data = mne.io.RawArray(mapped_data, info)
 
-    for each_channel in data:
-        for i in range(chunks - 1):
-            # [chunk_start : chunk_end]
-            yield each_channel[(secs * sample_frequency) * i: (secs * sample_frequency) * (i + 1)]
+        yield raw_data
+
+    mapped_data = list(map(lambda x: x[int((secs * sample_frequency) * (chunks - 1)):], data))
+    info = mne.create_info(
+        ch_types=signals.get_channel_types(),
+        sfreq=signals.info['sfreq'],
+        ch_names=signals.ch_names
+    )
+    raw_data = mne.io.RawArray(mapped_data, info)
+
+    yield raw_data
 
 
 def process_folder(folder_name: str, mode: Literal['edf', 'csv', 'eea']) -> None:
@@ -210,24 +226,27 @@ def process_folder(folder_name: str, mode: Literal['edf', 'csv', 'eea']) -> None
     if mode == 'edf':
         for file_name in file_names:
             data = get_signals_from_edf(os.path.join(folder_name, file_name))
-
+            preprocess_data_all_steps(data, file_name[:file_name.index('.')], 'EdfData')
     elif mode == 'csv':
         for file_name in file_names:
             data = get_signals_from_csv(os.path.join(folder_name, file_name))
-            for signal_chunk in data:
-                pass
+            for index, signal_chunk in enumerate(data):
+                file_name_no_extension = file_name[:file_name.index('.')]
+                preprocess_data_all_steps(signal_chunk, f'{file_name_no_extension}_chunk_{index}', 'CsvData')
+                print(f'Processed {index}')
     elif mode == 'eea':
         for file_name in file_names:
             data = get_signals_from_eea(os.path.join(folder_name, file_name))
+            preprocess_data_all_steps(data, file_name[:file_name.index('.')], 'EeaData')
 
 
-def preprocess_data_all_steps(signals: mne.io.RawArray | RawEDF, path_to_save_data: str):
-    # TODO: Add reference electrode
-    data = filter_mne(signals)
+def preprocess_data_all_steps(signals: mne.io.RawArray | RawEDF, filename: str, folder_name: str):
+    data = create_reference_electrode(signals)
+    data = filter_mne(data)
     data = resample_signal(data, original_sample_rate=signals.info['sfreq'])
     data = scale_values(data)
-    for time_window in split_into_time_windows(data, sample_frequency=signals.info['sfreq']):
-        save_to_pickle_file(time_window, path_to_save_data)
+    for index, time_window in enumerate(split_into_time_windows(data, sample_frequency=data.info['sfreq'])):
+        save_to_pickle_file(time_window, f"{filename}_{index}.pk", folder_name)
 
 
 def calculate_margenau_lib(signal: List[float]) -> List[List[float]]:
