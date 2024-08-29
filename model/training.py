@@ -29,7 +29,7 @@ np.random.shuffle(segmented_train_data)
 labels = np.array([sample['label'] for sample in segmented_train_data])
 skf = StratifiedKFold(n_splits=KFOLD_N_SPLITS)
 
-log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+log_dir = "logs/fit/" + datetime.now().strftime("%Y%m%d-%H%M%S")
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
 
