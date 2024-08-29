@@ -157,11 +157,11 @@ def create_eeg_dataset(data: List[Dict[str, np.ndarray]], batch_size: int, shuff
     def generator():
         for sample in data:
             frames, label = preprocess_eeg_sample(sample)
-            yield frames, label
+            yield frames, np.expand_dims(label, axis=-1)
 
     output_signature = (
         tf.TensorSpec(shape=(None, SEGMENT_ROWS, SEGMENT_COLUMNS, CHANNEL_NUMBER), dtype=tf.float32),
-        tf.TensorSpec(shape=(), dtype=tf.int32)
+        tf.TensorSpec(shape=(1,), dtype=tf.int32)
     )
 
     dataset = tf.data.Dataset.from_generator(generator, output_signature=output_signature)
