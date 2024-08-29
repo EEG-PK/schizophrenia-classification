@@ -9,11 +9,12 @@ from sklearn.metrics import cohen_kappa_score
 
 from data_preparation import create_eeg_dataset, load_and_segment_eeg_data
 from model import create_model
-from params import EPOCHS, SEGMENT_COLUMNS, SEGMENT_ROWS, CHANNEL_NUMBER, KFOLD_N_SPLITS
+from params import EPOCHS, SEGMENT_COLUMNS, SEGMENT_ROWS, CHANNEL_NUMBER, KFOLD_N_SPLITS, DATASET, DATASETS_DIR, \
+    SCHIZO_DUMP_FILE, HEALTH_DUMP_FILE
 
 # Data loading
-train_files_schizophrenia = ["model/eeg_schizophrenia.pk"]
-train_files_health = ["model/eeg_health.pk"]
+train_files_schizophrenia = [f"{DATASETS_DIR}/{DATASET}/{SCHIZO_DUMP_FILE}"]
+train_files_health = [f"{DATASETS_DIR}/{DATASET}/{HEALTH_DUMP_FILE}"]
 
 # Data segmentation
 segmented_train_data_schizophrenia = load_and_segment_eeg_data(train_files_schizophrenia, label=1)

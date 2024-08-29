@@ -1,14 +1,16 @@
 import optuna
 from optuna.trial import TrialState
 from mockup_data import mockup
+from params import DATASET, DATASETS_DIR
 from training import objective
 
+#TODO: Replace to proper data load
 # Data mock-up for now
-data_dir = 'model/data'
+data_dir = 'data'
 schizophrenia_files = ['33w1.eea', '088w1.eea', '103w.eea']
 health_files = ['088w1.eea', '103w.eea']
 
-mockup(data_dir, schizophrenia_files, health_files)
+mockup(data_dir, schizophrenia_files, health_files, dataset_dir=f"{DATASETS_DIR}/{DATASET}")
 
 
 def show_result(study: optuna.Study) -> None:

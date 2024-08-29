@@ -6,3 +6,7 @@ CHANNEL_NUMBER = 16
 EPOCHS = 3
 # BATCH_SIZE = 1
 KFOLD_N_SPLITS = 2
+DATASETS_DIR = '../data'
+DATASET = 'dataset1'
+SCHIZO_DUMP_FILE = 'eeg_schizophrenia.pk'
+HEALTH_DUMP_FILE = 'eeg_health.pk'
