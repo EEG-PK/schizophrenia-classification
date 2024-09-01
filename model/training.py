@@ -50,17 +50,6 @@ def objective(trial: optuna.Trial) -> float:
 
     accuracies = []
 
-    def specificity(y_true, y_pred):
-        true_negatives = K.sum(K.round(K.clip((1 - y_true) * (1 - y_pred), 0, 1)))
-        possible_negatives = K.sum(K.round(K.clip(1 - y_true, 0, 1)))
-        specificity = true_negatives / (possible_negatives + K.epsilon())
-        return specificity
-
-    def f1_score(y_true, y_pred):
-        precision = tf.keras.metrics.Precision()(y_true, y_pred)
-        recall = tf.keras.metrics.Recall()(y_true, y_pred)
-        return 2 * ((precision * recall) / (precision + recall + K.epsilon()))
-
     # Passing through the folds
     for fold, (train_index, val_index) in enumerate(skf.split(segmented_train_data, labels)):
         train_data = [segmented_train_data[i] for i in train_index]
@@ -73,13 +62,20 @@ def objective(trial: optuna.Trial) -> float:
         train_ds = create_eeg_dataset(train_data, batch_size=batch_size)
         val_ds = create_eeg_dataset(val_data, batch_size=batch_size)
 
+        # Debug
+        # for element in val_ds.take(2):
+        #     frames, label = element
+        #     print("Frames shape:", frames.shape)
+        #     print("Label:", label.numpy())
+        #     print("Label shape:", label.shape)
+
         model = create_model(trial, input_shape, debug=True)
         model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
                       loss='binary_crossentropy', metrics=[
                 'accuracy',
                 tf.keras.metrics.Recall(),  # Sensitivity/Recall
-                specificity,  # Specificity
-                f1_score
+                tf.keras.metrics.SpecificityAtSensitivity(sensitivity=0.5),
+                tf.keras.metrics.F1Score(threshold=0.5, average='micro')
             ])
 
         history = model.fit(
