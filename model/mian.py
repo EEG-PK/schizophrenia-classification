@@ -1,8 +1,10 @@
 import optuna
 from optuna.trial import TrialState
+import tensorflow as tf
+
 from mockup_data import mockup
 from params import DATASET, DATASETS_DIR
-from training import objective
+from training import objective, test_model
 
 #TODO: Replace to proper data load
 # Data mock-up for now
@@ -38,14 +40,17 @@ def show_result(study: optuna.Study) -> None:
 
 
 def main():
-    study = optuna.create_study(
-        direction="maximize", pruner=optuna.pruners.MedianPruner(n_startup_trials=2)
-    )
-
-    study.optimize(objective, n_trials=25, timeout=600, gc_after_trial=True)
-
-    show_result(study)
+    # study = optuna.create_study(
+    #     direction="maximize", pruner=optuna.pruners.MedianPruner(n_startup_trials=2)
+    # )
+    #
+    # study.optimize(objective, n_trials=25, timeout=600, gc_after_trial=True)
+    #
+    # show_result(study)
+    test_model()
 
 
 if __name__ == "__main__":
+    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+    print("cuDNN Version: ", tf.sysconfig.get_build_info()["cudnn_version"])
     main()
