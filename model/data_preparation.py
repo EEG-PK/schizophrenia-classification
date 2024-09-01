@@ -54,7 +54,7 @@ def segment_signal(signal: np.ndarray, segment_size: int, sampling_rate: int) ->
     return np.array(segments)
 
 
-def preprocess_eeg_sample(sample: Dict[str, np.ndarray]) -> Tuple[np.ndarray, int]:
+def preprocess_eeg_sample(sample: Dict[str, np.ndarray]) -> Tuple[np.ndarray, float]:
     """
     Processes EEG sample by converting each segment into a 3D image representation.
 
@@ -87,6 +87,7 @@ def preprocess_eeg_sample(sample: Dict[str, np.ndarray]) -> Tuple[np.ndarray, in
         segment_image = np.stack([signal_to_image(channel) for channel in segment], axis=-1)
         processed_segments.append(segment_image)
 
+    label = tf.cast(label, tf.float32)
     return np.array(processed_segments), label
 
 
@@ -161,7 +162,7 @@ def create_eeg_dataset(data: List[Dict[str, np.ndarray]], batch_size: int, shuff
 
     output_signature = (
         tf.TensorSpec(shape=(None, SEGMENT_ROWS, SEGMENT_COLUMNS, CHANNEL_NUMBER), dtype=tf.float32),
-        tf.TensorSpec(shape=(1,), dtype=tf.int32)
+        tf.TensorSpec(shape=(1,), dtype=tf.float32)
     )
 
     dataset = tf.data.Dataset.from_generator(generator, output_signature=output_signature)
