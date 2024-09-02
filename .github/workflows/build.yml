@@ -1,0 +1,61 @@
+name: Schizophrenia classification
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniconda-version: "latest"
+          channels: conda-forge,nvidia/label/cuda-12.2.2,defaults
+          activate-environment: environment
+          environment-file: environment.yml
+          python-version: 3.11
+          auto-activate-base: false
+          show-channel-urls: true
+          use-only-tar-bz2: true
+
+      - name: Conda info
+        shell: bash
+        run: conda info
+      - name: Conda list
+        shell: bash
+        run: conda list
+
+      - name: Lint
+        shell: bash
+        run: |
+            conda install flake8
+            python -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+            python -m flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: LD_LIBRARY_PATH env variable creation
+        run: |
+          source activate environment
+          chmod +x env_create.sh
+          ./env_create.sh
+          conda deactivate
+      - name: Reactivate Conda environment
+        run: |
+          source activate environment
+
+      - name: Run tftb repair
+        run: |
+          python tftb_repair.py
