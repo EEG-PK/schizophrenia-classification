@@ -47,15 +47,12 @@ jobs:
             python -m flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
       - name: LD_LIBRARY_PATH env variable creation
+        shell: bash
         run: |
-          source activate environment
           chmod +x env_create.sh
           ./env_create.sh
           conda deactivate
-      - name: Reactivate Conda environment
-        run: |
-          source activate environment
+          conda activate environment
 
       - name: Run tftb repair
-        run: |
-          python tftb_repair.py
+        run: python tftb_repair.py
