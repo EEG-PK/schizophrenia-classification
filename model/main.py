@@ -6,7 +6,11 @@ from mockup_data import mockup
 from params import DATASET, DATASETS_DIR
 from training import objective, test_model
 
-#TODO: Replace to proper data load
+print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+print("CUDA Version: ", tf.sysconfig.get_build_info()["cuda_version"])
+print("cuDNN Version: ", tf.sysconfig.get_build_info()["cudnn_version"])
+
+# TODO: Replace to proper data load
 # Data mock-up for now
 data_dir = 'data'
 schizophrenia_files = ['33w1.eea', '088w1.eea', '103w.eea']
@@ -51,6 +55,4 @@ def main():
 
 
 if __name__ == "__main__":
-    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
-    print("cuDNN Version: ", tf.sysconfig.get_build_info()["cudnn_version"])
     main()
