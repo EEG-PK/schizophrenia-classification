@@ -16,7 +16,7 @@ def download_and_replace(url, local_path):
         print(f"Nieoczekiwany błąd podczas pobierania pliku z URL: {url} - {e}")
 
 
-def main(env_name, py_env):
+def main(env_name, py_version):
     # tftb corrected files on github
     file_paths = {
         'utils.py': 'https://raw.githubusercontent.com/EEG-PK/schizophrenia-classification/preprocessing/Preprocessing/tftb_repairs/tftb_generators_utils.py',
@@ -25,7 +25,7 @@ def main(env_name, py_env):
     }
 
     # tftb library path
-    base_dir = os.path.expanduser(f'~/miniconda3/envs/{env_name}/lib/python{py_env}/site-packages/tftb')
+    base_dir = os.path.expanduser(f'~/miniconda3/envs/{env_name}/lib/python{py_version}/site-packages/tftb')
 
     # Update all files
     for file_name, url in file_paths.items():
@@ -47,5 +47,5 @@ if __name__ == "__main__":
         sys.exit(1)
 
     env_name = sys.argv[1]
-    py_env = sys.argv[2]
-    main(env_name, py_env)
+    py_version = sys.argv[2]
+    main(env_name, py_version)

@@ -21,9 +21,9 @@ def read_eeg_data(file_path):
 
 
 def mockup(data_dir, ill_files, health_files, dataset_dir):
-    eeg_data_schizophrenia = [{'id': fine_name, 'eeg': read_eeg_data(f'{data_dir}/{fine_name}')} for fine_name in
+    eeg_data_schizophrenia = [{'id': file_name, 'eeg': read_eeg_data(f'{data_dir}/{file_name}')} for file_name in
                               ill_files]
-    eeg_data_health = [{'id': fine_name, 'eeg': read_eeg_data(f'{data_dir}/{fine_name}')} for fine_name in health_files]
+    eeg_data_health = [{'id': file_name, 'eeg': read_eeg_data(f'{data_dir}/{file_name}')} for file_name in health_files]
 
     f = open(f"{dataset_dir}/{SCHIZO_DUMP_FILE}", "wb")
     joblib.dump(eeg_data_schizophrenia, f)
