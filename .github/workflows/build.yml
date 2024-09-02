@@ -55,4 +55,5 @@ jobs:
           conda activate environment
 
       - name: Run tftb repair
+        shell: bash
         run: python tftb_repair.py ml_eeg_gpu_tf215 3.11
