@@ -25,8 +25,8 @@ jobs:
         with:
           miniconda-version: "latest"
           channels: conda-forge,nvidia/label/cuda-12.2.2,defaults
-          activate-environment: environment
-          environment-file: environment.yml
+          activate-environment: ml_eeg_gpu_tf215
+          environment-file: ml_eeg_gpu_tf215.yml
           python-version: 3.11
           auto-activate-base: false
           show-channel-urls: true
@@ -55,4 +55,4 @@ jobs:
           conda activate environment
 
       - name: Run tftb repair
-        run: python tftb_repair.py
+        run: python tftb_repair.py ml_eeg_gpu_tf215 3.11
