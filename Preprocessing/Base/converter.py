@@ -111,6 +111,13 @@ def filter_mne(signals: mne.io.RawArray | RawEDF, cutoff_freq: int = 64) -> mne.
 
 
 def save_to_pickle_file(signals: mne.io.RawArray | RawEDF, filename: str, folder_name: str) -> None:
+    """
+    Saves all the signals into dictionary format to pickle file.
+
+    :param signals: Signals
+    :param filename: Filename of file
+    :param folder_name: Folder in which data should be saved. If folder doesn't exist it will be created.
+    """
     if not os.path.exists(folder_name):
         os.mkdir(folder_name)
     dump(dict(zip(signals.ch_names, signals.get_data())), f"{folder_name}/{filename}")
@@ -171,6 +178,14 @@ def resample_signal(signals: mne.io.RawArray | RawEDF, original_sample_rate: int
 
 
 def scale_values(signals: mne.io.RawArray | RawEDF, min_val: float = 0, max_val: float = 1) -> mne.io.RawArray:
+    """
+    Scales all values to range [a,b]
+
+    :param signals: Signals in RawEdf or RawArray
+    :param min_val: Lower bound of range
+    :param max_val: Upper bound of range
+    :return:
+    """
     data = signals.get_data()
     data_normalized = (data - np.min(data)) / (np.max(data) - np.min(data))
     data_normalized = data_normalized * (max_val - min_val) + min_val
@@ -220,27 +235,45 @@ def split_into_time_windows(signals: mne.io.RawArray, sample_frequency: int, sec
     yield raw_data
 
 
-def process_folder(folder_name: str, mode: Literal['edf', 'csv', 'eea']) -> None:
+def process_folder(folder_name: str, mode: Literal['edf', 'csv', 'eea'], output_folder: str = None) -> None:
+    """
+    Main function. Read all files from provided folder and process them.
+    If output_folder is not provided, it will use default one.
+
+    :param output_folder: Folder where data should be saved.
+    :param folder_name: Folder which stores all the files
+    :param mode: File extension which are in the folder. THERE SHOULDN'T BE MORE THAN ONE FILE TYPE IN FOLDER
+    """
     file_names = os.listdir(folder_name)
 
     if mode == 'edf':
         for file_name in file_names:
             data = get_signals_from_edf(os.path.join(folder_name, file_name))
-            preprocess_data_all_steps(data, file_name[:file_name.index('.')], 'EdfData')
+            preprocess_data_all_steps(data, file_name[:file_name.index('.')],
+                                      output_folder if output_folder is not None else 'EdfData')
     elif mode == 'csv':
         for file_name in file_names:
             data = get_signals_from_csv(os.path.join(folder_name, file_name))
             for index, signal_chunk in enumerate(data):
                 file_name_no_extension = file_name[:file_name.index('.')]
-                preprocess_data_all_steps(signal_chunk, f'{file_name_no_extension}_chunk_{index}', 'CsvData')
+                preprocess_data_all_steps(signal_chunk, f'{file_name_no_extension}_chunk_{index}',
+                                          output_folder if output_folder is not None else 'CsvData')
                 print(f'Processed {index}')
     elif mode == 'eea':
         for file_name in file_names:
             data = get_signals_from_eea(os.path.join(folder_name, file_name))
-            preprocess_data_all_steps(data, file_name[:file_name.index('.')], 'EeaData')
+            preprocess_data_all_steps(data, file_name[:file_name.index('.')],
+                                      output_folder if output_folder is not None else 'EeaData')
 
 
 def preprocess_data_all_steps(signals: mne.io.RawArray | RawEDF, filename: str, folder_name: str):
+    """
+    Main pipeline for preprocessing
+
+    :param signals: Signals from files in RawArray or RawEDF
+    :param filename: Filename of pk file
+    :param folder_name: Folder where pk file should be stored
+    """
     data = create_reference_electrode(signals)
     data = filter_mne(data)
     data = resample_signal(data, original_sample_rate=signals.info['sfreq'])
