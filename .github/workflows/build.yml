@@ -2,9 +2,9 @@ name: Schizophrenia classification
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "development" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "development" ]
 
 permissions:
   contents: read
