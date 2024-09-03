@@ -2,6 +2,7 @@ name: ml_eeg_gpu_tf215_ver
 channels:
   - conda-forge
   - defaults
+  - nvidia/label/cuda-12.2.2
 dependencies:
   - python=3.11
   - numpy=1.26.4
@@ -13,8 +14,8 @@ dependencies:
   - mne=1.8.0 # 0.16.2, 1.8.0
   - joblib=1.4.2
   - pillow=10.4.0
-  - nvidia/label/cuda-12.2.2::cuda-toolkit=12.2.2
-  - conda-forge::cudnn=8.9.7.29
+  - cuda-toolkit=12.2.2
+  - cudnn=8.9.7.29
   - pip
   - pip:
     - tensorflow==2.15.0
