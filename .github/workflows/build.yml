@@ -49,7 +49,8 @@ jobs:
         run: |
           chmod +x env_create.sh
           conda run -n ml_eeg_gpu_tf215_ver ./env_create.sh
-          conda activate ml_eeg_gpu_tf215_ver
+          conda run -n ml_eeg_gpu_tf215_ver export OLD_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+          conda run -n ml_eeg_gpu_tf215_ver export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$OLD_LD_LIBRARY_PATH
 
       - name: Run tftb repair
         run: conda run -n ml_eeg_gpu_tf215_ver python tftb_repair.py ml_eeg_gpu_tf215_ver 3.11
