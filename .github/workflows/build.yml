@@ -32,7 +32,6 @@ jobs:
           activate-environment: ml_eeg_gpu_tf215_ver
           environment-file: ml_eeg_gpu_tf215_ver.yml
           python-version: 3.11
-          auto-activate-base: false
           show-channel-urls: true
 
       - name: Conda info
@@ -55,3 +54,12 @@ jobs:
 
       - name: Run tftb repair
         run: conda run -n ml_eeg_gpu_tf215_ver python tftb_repair.py ml_eeg_gpu_tf215_ver 3.11
+
+      - name: PyTests - cuda config
+        run: |
+          conda install -n ml_eeg_gpu_tf215_ver pytest
+          conda run -n ml_eeg_gpu_tf215_ver pytest tests/test_tensorflow_setup.py
+
+      - name: PyTests - tftb files
+        run: |
+          conda run -n ml_eeg_gpu_tf215_ver pytest tests/tftb.py
