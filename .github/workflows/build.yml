@@ -24,9 +24,9 @@ jobs:
       - uses: conda-incubator/setup-miniconda@v3
         with:
           miniconda-version: "latest"
-          channels: conda-forge,nvidia/label/cuda-12.2.2,defaults
-          activate-environment: ml_eeg_gpu_tf215
-          environment-file: ml_eeg_gpu_tf215.yml
+          channels: conda-forge,defaults,nvidia/label/cuda-12.2.2
+          activate-environment: ml_eeg_gpu_tf215_ver
+          environment-file: ml_eeg_gpu_tf215_ver.yml
           python-version: 3.11
           auto-activate-base: false
           show-channel-urls: true
