@@ -49,7 +49,6 @@ jobs:
         run: |
           chmod +x env_create.sh
           conda run -n ml_eeg_gpu_tf215_ver ./env_create.sh
-          conda deactivate
           conda activate ml_eeg_gpu_tf215_ver
 
       - name: Run tftb repair
