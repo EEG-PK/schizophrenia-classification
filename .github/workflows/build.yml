@@ -30,7 +30,6 @@ jobs:
           python-version: 3.11
           auto-activate-base: false
           show-channel-urls: true
-          use-only-tar-bz2: true
 
       - name: Conda info
         shell: bash
