@@ -38,19 +38,9 @@ def get_signals_from_csv(filename: str, sample_frequency: int = 1024) -> Generat
         channel_types = ['eeg'] * len(eeg_data)
 
         info = mne.create_info(ch_types=channel_types, sfreq=sample_frequency, ch_names=list(relevant_data.columns))
+        info.set_montage('standard_1020')
         raw_data = mne.io.RawArray(eeg_data, info)
         yield raw_data
-
-
-def create_reference_electrode(signals: mne.io.RawArray | RawEDF) -> mne.io.RawArray | RawEDF:
-    # signals.del_proj()  # remove our average reference projector first
-    # sphere = mne.make_sphere_model("auto", "auto", signals.info)
-    # src = mne.setup_volume_source_space(sphere=sphere, exclude=30.0, pos=15.0)
-    # forward = mne.make_forward_solution(signals.info, trans=None, src=src, bem=sphere)
-    # eeg_data = signals.copy().set_eeg_reference(ref_channels='REST', forward=forward)
-    eeg_data = signals.copy().set_eeg_reference(ref_channels='average')
-
-    return eeg_data
 
 
 def get_signals_from_eea(filename: str, measurements_per_channel: int = 7680,
@@ -81,6 +71,7 @@ def get_signals_from_eea(filename: str, measurements_per_channel: int = 7680,
         channel_types = ['eeg'] * len(channels_filtered)
 
         info = mne.create_info(ch_types=channel_types, sfreq=sample_frequency, ch_names=channels_filtered)
+        info.set_montage('standard_1020')
         raw_data = mne.io.RawArray(eeg_data, info)
         return raw_data
 
@@ -96,6 +87,16 @@ def get_signals_from_edf(filename: str) -> RawEDF:
     # drop all channels which aren't common for all dataset
     edf_data.drop_channels(set(edf_data.ch_names) - set(common_channels))
     return edf_data
+
+def create_reference_electrode(signals: mne.io.RawArray | RawEDF) -> mne.io.RawArray | RawEDF:
+    signals.del_proj()  # remove our average reference projector first
+    sphere = mne.make_sphere_model("auto", "auto", signals.info)
+    src = mne.setup_volume_source_space(sphere=sphere, exclude=30.0)
+    forward = mne.make_forward_solution(signals.info, trans=None, src=src, bem=sphere, meg=False)
+    eeg_data = signals.copy().set_eeg_reference(ref_channels='REST', forward=forward)
+    # eeg_data = signals.copy().set_eeg_reference(ref_channels='average')
+
+    return eeg_data
 
 
 def filter_mne(signals: mne.io.RawArray | RawEDF, cutoff_freq: int = 64) -> mne.io.RawArray | RawEDF:
@@ -191,6 +192,7 @@ def scale_values(signals: mne.io.RawArray | RawEDF, min_val: float = 0, max_val:
     data_normalized = data_normalized * (max_val - min_val) + min_val
 
     info = mne.create_info(ch_types=signals.get_channel_types(), sfreq=signals.info['sfreq'], ch_names=signals.ch_names)
+    info.set_montage('standard_1020')
     raw_data = mne.io.RawArray(data_normalized, info)
     return raw_data
 
@@ -230,6 +232,7 @@ def split_into_time_windows(signals: mne.io.RawArray, sample_frequency: int, sec
         sfreq=signals.info['sfreq'],
         ch_names=signals.ch_names
     )
+    info.set_montage('standard_1020')
     raw_data = mne.io.RawArray(mapped_data, info)
 
     yield raw_data
