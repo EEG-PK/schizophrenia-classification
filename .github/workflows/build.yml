@@ -19,6 +19,10 @@ jobs:
       matrix:
         os: ["ubuntu", "macos", "windows"]
 
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - uses: actions/checkout@v4
       - uses: conda-incubator/setup-miniconda@v3
@@ -32,27 +36,22 @@ jobs:
           show-channel-urls: true
 
       - name: Conda info
-        shell: bash
         run: conda info
       - name: Conda list
-        shell: bash
-        run: conda list
+        run: conda list -n ml_eeg_gpu_tf215_ver
 
       - name: Lint
-        shell: bash
         run: |
-            conda install flake8
-            python -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-            python -m flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+            conda install -n ml_eeg_gpu_tf215_ver flake8
+            conda run -n ml_eeg_gpu_tf215_ver python -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+            conda run -n ml_eeg_gpu_tf215_ver python -m flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
       - name: LD_LIBRARY_PATH env variable creation
-        shell: bash
         run: |
           chmod +x env_create.sh
-          ./env_create.sh
+          conda run -n ml_eeg_gpu_tf215_ver ./env_create.sh
           conda deactivate
-          conda activate environment
+          conda activate ml_eeg_gpu_tf215_ver
 
       - name: Run tftb repair
-        shell: bash
-        run: python tftb_repair.py ml_eeg_gpu_tf215 3.11
+        run: conda run -n ml_eeg_gpu_tf215_ver python tftb_repair.py ml_eeg_gpu_tf215_ver 3.11
