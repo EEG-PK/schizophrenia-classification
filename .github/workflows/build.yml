@@ -21,7 +21,7 @@ jobs:
 
     defaults:
       run:
-        shell: bash
+        shell: bash -l {0}
 
     steps:
       - uses: actions/checkout@v4
@@ -31,35 +31,36 @@ jobs:
           channels: conda-forge,defaults,nvidia/label/cuda-12.2.2
           activate-environment: ml_eeg_gpu_tf215_ver
           environment-file: ml_eeg_gpu_tf215_ver.yml
+          auto-activate-base: false
           python-version: 3.11
           show-channel-urls: true
 
       - name: Conda info
         run: conda info
       - name: Conda list
-        run: conda list -n ml_eeg_gpu_tf215_ver
+        run: conda list
 
       - name: Lint
         run: |
-            conda install -n ml_eeg_gpu_tf215_ver flake8
-            conda run -n ml_eeg_gpu_tf215_ver python -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-            conda run -n ml_eeg_gpu_tf215_ver python -m flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+            conda install flake8
+            python -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+            python -m flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
       - name: LD_LIBRARY_PATH env variable creation
         run: |
           chmod +x env_create.sh
-          conda run -n ml_eeg_gpu_tf215_ver ./env_create.sh
-          conda run -n ml_eeg_gpu_tf215_ver export OLD_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
-          conda run -n ml_eeg_gpu_tf215_ver export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$OLD_LD_LIBRARY_PATH
+          ./env_create.sh
+          export OLD_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+          export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$OLD_LD_LIBRARY_PATH
 
       - name: Run tftb repair
-        run: conda run -n ml_eeg_gpu_tf215_ver python tftb_repair.py ml_eeg_gpu_tf215_ver 3.11
+        run: python tftb_repair.py ml_eeg_gpu_tf215_ver 3.11
 
       - name: PyTests - cuda config
         run: |
-          conda install -n ml_eeg_gpu_tf215_ver pytest
-          conda run -n ml_eeg_gpu_tf215_ver pytest tests/test_tensorflow_setup.py
+          conda install pytest
+          pytest tests/test_tensorflow_setup.py
 
       - name: PyTests - tftb files
         run: |
-          conda run -n ml_eeg_gpu_tf215_ver pytest tests/tftb.py
+          pytest tests/tftb.py
