@@ -81,7 +81,7 @@ class PseudoPageRepresentation(PageRepresentation):
         return fwindow / fwindow[lh]
 
     def run(self):
-        lh = (self.fwindow.shape[0] - 1) / 2
+        lh = (self.fwindow.shape[0] - 1) // 2
         for icol in range(self.ts.shape[0]):
             tau = np.arange(min([self.n_fbins - 1, lh, icol - 1]) + 1)
             indices = np.remainder(self.n_fbins + tau, self.n_fbins) + 1
