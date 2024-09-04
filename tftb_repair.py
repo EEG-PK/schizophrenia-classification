@@ -7,7 +7,7 @@ def download_and_replace(url, local_path):
     try:
         with urllib.request.urlopen(url) as response:
             content = response.read()
-            with open(local_path, 'wb', encoding="utf-8") as file:
+            with open(local_path, 'wb') as file:
                 file.write(content)
         print(f"The file '{local_path}' has been successfully updated.")
     except urllib.error.URLError as e:
