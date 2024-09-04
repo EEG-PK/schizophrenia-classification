@@ -1,51 +1,51 @@
 import os
 import sys
-import urllib.request
+import shutil
+# import urllib.request
 
 
-def download_and_replace(url, local_path):
+def copy_and_replace(local_path, target_path):
+    if not os.path.exists(local_path):
+        raise FileNotFoundError(f"Required file '{local_path}' not found.")
     try:
-        with urllib.request.urlopen(url) as response:
-            content = response.read()
-            with open(local_path, 'wb') as file:
-                file.write(content)
-        print(f"Plik '{local_path}' został pomyślnie zaktualizowany.")
-    except urllib.error.URLError as e:
-        print(f"Błąd pobierania pliku z URL: {url} - {e.reason}")
+        shutil.copyfile(local_path, target_path)
+        print(f"The file '{target_path}' has been successfully updated.")
     except Exception as e:
-        print(f"Nieoczekiwany błąd podczas pobierania pliku z URL: {url} - {e}")
+        print(f"Unexpected error when copying the file: {local_path} - {e}")
+        sys.exit(1)
 
 
-def main(env_name, py_version):
-    # tftb corrected files on github
-    file_paths = {
-        'utils.py': 'https://raw.githubusercontent.com/EEG-PK/schizophrenia-classification/preprocessing/Preprocessing/tftb_repairs/tftb_generators_utils.py',
-        'base.py': 'https://raw.githubusercontent.com/EEG-PK/schizophrenia-classification/preprocessing/Preprocessing/tftb_repairs/tftb_processing_base.py',
-        'cohen.py': 'https://raw.githubusercontent.com/EEG-PK/schizophrenia-classification/preprocessing/Preprocessing/tftb_repairs/tftb_processing_cohen.py'
-    }
+def main():
+    if "CONDA_PREFIX" not in os.environ:
+        print("Error: The script must be run within an active Conda environment.")
+        sys.exit(1)
+
+    conda_prefix = os.environ["CONDA_PREFIX"]
+    py_version = f"{sys.version_info.major}.{sys.version_info.minor}"
 
     # tftb library path
-    base_dir = os.path.expanduser(f'~/miniconda3/envs/{env_name}/lib/python{py_version}/site-packages/tftb')
+    base_dir = os.path.join(conda_prefix, f'lib/python{py_version}/site-packages/tftb')
+
+    repair_dir = os.path.join(os.path.dirname(__file__), 'tftb_repair')
+    file_paths = {
+        'utils.py': os.path.join(repair_dir, 'tftb_generators_utils.py'),
+        'base.py': os.path.join(repair_dir, 'tftb_processing_base.py'),
+        'cohen.py': os.path.join(repair_dir, 'tftb_processing_cohen.py')
+    }
 
     # Update all files
-    for file_name, url in file_paths.items():
+    for file_name, local_file_path in file_paths.items():
         # Determine the location of the file based on the path
         if file_name == 'utils.py':
-            local_file_path = os.path.join(base_dir, 'generators', file_name)
+            target_file_path = os.path.join(base_dir, 'generators', file_name)
         else:
-            local_file_path = os.path.join(base_dir, 'processing', file_name)
+            target_file_path = os.path.join(base_dir, 'processing', file_name)
 
-        # Check if the directories exist, if not, create them
-        os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+        if not os.path.exists(os.path.dirname(target_file_path)):
+            raise FileNotFoundError(f"Target directory '{os.path.dirname(target_file_path)}' does not exist.")
 
-        download_and_replace(url, local_file_path)
+        copy_and_replace(local_file_path, target_file_path)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python <script_name.py> <env_name> <python_env_version>")
-        sys.exit(1)
-
-    env_name = sys.argv[1]
-    py_version = sys.argv[2]
-    main(env_name, py_version)
+    main()
