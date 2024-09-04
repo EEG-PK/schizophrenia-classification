@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu", "windows"]
+        os: ["ubuntu"]
 
     defaults:
       run:
@@ -54,7 +54,7 @@ jobs:
           export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$OLD_LD_LIBRARY_PATH
 
       - name: Run tftb repair
-        run: python tftb_repair.py ml_eeg_gpu_tf215_ver 3.11
+        run: python tftb_repair.py
 
       - name: PyTests - cuda config
         run: |

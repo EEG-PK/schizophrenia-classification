@@ -50,8 +50,7 @@ conda deactivate
 conda activate ml_eeg_gpu_tf215
 ```
 #### 3) Fix tftb library compatibility
-tftb_repair.py [conda_environment_name] [python_version]<br>
-`python tftb_repair.py ml_eeg_gpu_tf215 3.11`
+`python tftb_repair.py`
 
 ## Tasks
 ### Task 1: EEG signal preparation/preprocessing<a id='task-1'></a>
