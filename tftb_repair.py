@@ -7,13 +7,13 @@ def download_and_replace(url, local_path):
     try:
         with urllib.request.urlopen(url) as response:
             content = response.read()
-            with open(local_path, 'wb') as file:
+            with open(local_path, 'wb', encoding="utf-8") as file:
                 file.write(content)
-        print(f"Plik '{local_path}' został pomyślnie zaktualizowany.")
+        print(f"The file '{local_path}' has been successfully updated.")
     except urllib.error.URLError as e:
-        print(f"Błąd pobierania pliku z URL: {url} - {e.reason}")
+        print(f"Error downloading a file from a URL: {url} - {e.reason}")
     except Exception as e:
-        print(f"Nieoczekiwany błąd podczas pobierania pliku z URL: {url} - {e}")
+        print(f"Unexpected error when downloading a file from a URL: {url} - {e}")
 
 
 def main(env_name, py_version):
