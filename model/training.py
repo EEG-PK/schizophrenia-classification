@@ -31,6 +31,9 @@ skf = StratifiedKFold(n_splits=KFOLD_N_SPLITS)
 log_dir = "logs/fit/" + datetime.now().strftime("%Y%m%d-%H%M%S")
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
+strategy = tf.distribute.MirroredStrategy()
+print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
+
 
 def objective(trial: optuna.Trial) -> float:
     """
@@ -46,6 +49,8 @@ def objective(trial: optuna.Trial) -> float:
     # Hyperparameters from Optuna
     learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
     batch_size = trial.suggest_categorical('batch_size', [1])
+
+    print(f"Trial Parameters: learning_rate={learning_rate}, batch_size={batch_size}")
 
     accuracies = []
 
@@ -68,14 +73,16 @@ def objective(trial: optuna.Trial) -> float:
         #     print("Label:", label.numpy())
         #     print("Label shape:", label.shape)
 
-        model = create_model(trial, input_shape, debug=True)
-        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
-                      loss='binary_crossentropy', metrics=[
-                'accuracy',
-                tf.keras.metrics.Recall(),  # Sensitivity/Recall
-                tf.keras.metrics.SpecificityAtSensitivity(sensitivity=0.5),
-                tf.keras.metrics.F1Score(threshold=0.5, average='micro')
-            ])
+        with strategy.scope():
+            model = create_model(trial, input_shape, debug=True)
+            model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+                          loss='binary_crossentropy', metrics=[
+                    'accuracy',
+                    tf.keras.metrics.Recall(),  # Sensitivity/Recall
+                    tf.keras.metrics.SpecificityAtSensitivity(sensitivity=0.5),
+                    tf.keras.metrics.F1Score(threshold=0.5, average='micro')
+                ])
+        model.summary()
 
         history = model.fit(
             train_ds,
@@ -87,28 +94,29 @@ def objective(trial: optuna.Trial) -> float:
             callbacks=[tensorboard_callback]  # command to run tensorBoard: tensorboard --logdir=logs/fit
         )
 
-        y_val_pred = model.predict(val_ds)
+        y_val_pred = model.predict(val_ds, steps=steps_per_epoch_val)
         y_val_pred = np.round(y_val_pred).astype(int)
-        y_val_true = np.concatenate([y for x, y in val_ds], axis=0)
+        # y_val_true = np.concatenate([y for x, y in val_ds], axis=0)
 
-        kappa = cohen_kappa_score(y_val_true, y_val_pred)
-        print(f"Cohen's Kappa: {kappa}")
+        # kappa = cohen_kappa_score(y_val_true, y_val_pred)
+        # print(f"Cohen's Kappa: {kappa}")
 
         # Reporting the result after the fold
         val_accuracy = np.mean(history.history['val_accuracy'])
         trial.report(val_accuracy, step=fold)
-        # Checking whether the trial should be terminated
-        if trial.should_prune():
-            raise optuna.exceptions.TrialPruned()
 
-        accuracies.append(max(history.history['val_accuracy']))
+    # Checking whether the trial should be terminated
+    if trial.should_prune():
+        raise optuna.exceptions.TrialPruned()
+
+    accuracies.append(max(history.history['val_accuracy']))
 
     return np.mean(accuracies)
 
 
 def test_model():
     learning_rate = 0.001
-    batch_size = 1
+    batch_size = 2
     accuracies = []
 
     # Passing through the folds
@@ -137,8 +145,8 @@ def test_model():
             filter_size=3,
             strides_conv=1,
             pool_size=2,
-            strides_pool=1,
-            lstm_units=5,
+            strides_pool=2,
+            lstm_units=3,
             dropout_rate=0.5,
             l2_reg=0.02,
             debug=True
@@ -152,6 +160,8 @@ def test_model():
                 tf.keras.metrics.F1Score(threshold=0.5, average='micro')
             ])
 
+        model.summary()
+
         history = model.fit(
             train_ds,
             epochs=EPOCHS,
@@ -162,12 +172,12 @@ def test_model():
             callbacks=[tensorboard_callback]  # command to run tensorBoard: tensorboard --logdir=logs/fit
         )
 
-        y_val_pred = model.predict(val_ds)
+        y_val_pred = model.predict(val_ds, steps=steps_per_epoch_val)
         y_val_pred = np.round(y_val_pred).astype(int)
-        y_val_true = np.concatenate([y for x, y in val_ds], axis=0)
+        # y_val_true = np.concatenate([y for x, y in val_ds], axis=0)
 
-        kappa = cohen_kappa_score(y_val_true, y_val_pred)
-        print(f"Cohen's Kappa: {kappa}")
+        # kappa = cohen_kappa_score(y_val_true, y_val_pred)
+        # print(f"Cohen's Kappa: {kappa}")
 
         accuracies.append(max(history.history['val_accuracy']))
 
