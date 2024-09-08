@@ -2,6 +2,7 @@ import math
 
 import mne
 import pandas as pd
+from dateutil.relativedelta import relativedelta
 from mne.io import read_raw_edf
 from typing import List, Literal, Generator
 
@@ -32,12 +33,11 @@ def get_signals_from_csv(filename: str, sample_frequency: int = 1024) -> Generat
         if df.loc[df['condition'] != 1].size != 0:
             continue
         # get only columns which are in common channels in all datasets
-        relevant_columns = df.columns.intersection(common_channels)
-        relevant_data = df[relevant_columns]
+        relevant_data = df.iloc[:, 4:-6]
         eeg_data = relevant_data.values.T
         channel_types = ['eeg'] * len(eeg_data)
 
-        info = mne.create_info(ch_types=channel_types, sfreq=sample_frequency, ch_names=list(relevant_data.columns))
+        info = mne.create_info(ch_types=channel_types, sfreq=sample_frequency, ch_names=csv_labels[4:-6])
         info.set_montage('standard_1020')
         raw_data = mne.io.RawArray(eeg_data, info)
         yield raw_data
@@ -60,17 +60,13 @@ def get_signals_from_eea(filename: str, measurements_per_channel: int = 7680,
             # Order of this channel names are important, don't change it
             channels = ['F7', 'F3', 'F4', 'F8', 'T3', 'C3', 'Cz', 'C4', 'T4', 'T5', 'P3', 'Pz', 'P4', 'T6',
                         'O1', 'O2']
-            # get a filtered channel names which are common in all datasets
-            channels_filtered = [channels[i] for i in range(len(channels)) if
-                                 channels[i] in common_channels]
-
         # we need to iterate through all values and skip those which are not common for all datasets
         eeg_data = [lines[i:i + measurements_per_channel] for enum_i, i in
-                    enumerate(range(0, len(lines), measurements_per_channel)) if channels[enum_i] in common_channels]
+                    enumerate(range(0, len(lines), measurements_per_channel))]
 
-        channel_types = ['eeg'] * len(channels_filtered)
+        channel_types = ['eeg'] * len(channels)
 
-        info = mne.create_info(ch_types=channel_types, sfreq=sample_frequency, ch_names=channels_filtered)
+        info = mne.create_info(ch_types=channel_types, sfreq=sample_frequency, ch_names=channels)
         info.set_montage('standard_1020')
         raw_data = mne.io.RawArray(eeg_data, info)
         return raw_data
@@ -84,9 +80,19 @@ def get_signals_from_edf(filename: str) -> RawEDF:
     :return: RawEDF with signals
     """
     edf_data = read_raw_edf(filename, preload=True)
-    # drop all channels which aren't common for all dataset
-    edf_data.drop_channels(set(edf_data.ch_names) - set(common_channels))
+    edf_data.set_montage('standard_1020')
     return edf_data
+
+
+def drop_channels(signals: RawEDF | mne.io.RawArray) -> mne.io.RawArray | RawEDF:
+    """
+    Drops all channels which are not common for all datasets
+
+    :param signals:
+    """
+    signals.copy().drop_channels(set(signals.ch_names) - set(common_channels))
+    return signals
+
 
 def create_reference_electrode(signals: mne.io.RawArray | RawEDF) -> mne.io.RawArray | RawEDF:
     signals.del_proj()  # remove our average reference projector first
@@ -99,7 +105,7 @@ def create_reference_electrode(signals: mne.io.RawArray | RawEDF) -> mne.io.RawA
     return eeg_data
 
 
-def filter_mne(signals: mne.io.RawArray | RawEDF, cutoff_freq: int = 64) -> mne.io.RawArray | RawEDF:
+def filter_mne(signals: mne.io.RawArray | RawEDF, cutoff_freq: int = 40) -> mne.io.RawArray | RawEDF:
     """
     Performs lowpass filter on all signals.
 
@@ -111,7 +117,7 @@ def filter_mne(signals: mne.io.RawArray | RawEDF, cutoff_freq: int = 64) -> mne.
     return signals
 
 
-def save_to_pickle_file(signals: mne.io.RawArray | RawEDF, filename: str, folder_name: str) -> None:
+def save_to_pickle_file(signals: dict[str, np.ndarray[float]], filename: str, folder_name: str) -> None:
     """
     Saves all the signals into dictionary format to pickle file.
 
@@ -121,7 +127,7 @@ def save_to_pickle_file(signals: mne.io.RawArray | RawEDF, filename: str, folder
     """
     if not os.path.exists(folder_name):
         os.mkdir(folder_name)
-    dump(dict(zip(signals.ch_names, signals.get_data())), f"{folder_name}/{filename}")
+    dump(signals, f"{folder_name}/{filename}")
 
 
 def resample_signal(signals: mne.io.RawArray | RawEDF, original_sample_rate: int,
@@ -178,7 +184,7 @@ def resample_signal(signals: mne.io.RawArray | RawEDF, original_sample_rate: int
     # return raw_data
 
 
-def scale_values(signals: mne.io.RawArray | RawEDF, min_val: float = 0, max_val: float = 1) -> mne.io.RawArray:
+def scale_values(signals: mne.io.RawArray | RawEDF, min_val: float = -1, max_val: float = 1) -> mne.io.RawArray:
     """
     Scales all values to range [a,b]
 
@@ -198,7 +204,7 @@ def scale_values(signals: mne.io.RawArray | RawEDF, min_val: float = 0, max_val:
 
 
 def split_into_time_windows(signals: mne.io.RawArray, sample_frequency: int, secs: float = 3) -> Generator[
-    mne.io.RawArray, None, None]:
+    dict[str,np.ndarray[float]], None, None]:
     """
     Returns some time window from signal. It's generator for simplicity’s sake.
 
@@ -208,34 +214,40 @@ def split_into_time_windows(signals: mne.io.RawArray, sample_frequency: int, sec
     :return: Signal from time chunk
     """
 
-    data = signals.get_data()
-    time = len(data[0]) / sample_frequency
+    epochs = mne.make_fixed_length_epochs(signals, duration=secs, preload=True)
 
-    chunks = int(time // 3)
+    for chunk in epochs:
+        # zips chunks into dict
+        yield dict(zip(epochs.ch_names,chunk))
 
-    for i in range(chunks - 1):
-        # [chunk_start : chunk_end]
-        chunk_start = int((secs * sample_frequency) * i)
-        chunk_end = int((secs * sample_frequency) * (i + 1))
-        mapped_data = list(map(lambda x: x[chunk_start:chunk_end], data))
-        info = mne.create_info(
-            ch_types=signals.get_channel_types(),
-            sfreq=signals.info['sfreq'],
-            ch_names=signals.ch_names)
-        raw_data = mne.io.RawArray(mapped_data, info)
-
-        yield raw_data
-
-    mapped_data = list(map(lambda x: x[int((secs * sample_frequency) * (chunks - 1)):], data))
-    info = mne.create_info(
-        ch_types=signals.get_channel_types(),
-        sfreq=signals.info['sfreq'],
-        ch_names=signals.ch_names
-    )
-    info.set_montage('standard_1020')
-    raw_data = mne.io.RawArray(mapped_data, info)
-
-    yield raw_data
+    # data = signals.get_data()
+    # time = len(data[0]) / sample_frequency
+    #
+    # chunks = int(time // 3)
+    #
+    # for i in range(chunks - 1):
+    #     # [chunk_start : chunk_end]
+    #     chunk_start = int((secs * sample_frequency) * i)
+    #     chunk_end = int((secs * sample_frequency) * (i + 1))
+    #     mapped_data = list(map(lambda x: x[chunk_start:chunk_end], data))
+    #     info = mne.create_info(
+    #         ch_types=signals.get_channel_types(),
+    #         sfreq=signals.info['sfreq'],
+    #         ch_names=signals.ch_names)
+    #     raw_data = mne.io.RawArray(mapped_data, info)
+    #
+    #     yield raw_data
+    #
+    # mapped_data = list(map(lambda x: x[int((secs * sample_frequency) * (chunks - 1)):], data))
+    # info = mne.create_info(
+    #     ch_types=signals.get_channel_types(),
+    #     sfreq=signals.info['sfreq'],
+    #     ch_names=signals.ch_names
+    # )
+    # info.set_montage('standard_1020')
+    # raw_data = mne.io.RawArray(mapped_data, info)
+    #
+    # yield raw_data
 
 
 def process_folder(folder_name: str, mode: Literal['edf', 'csv', 'eea'], output_folder: str = None) -> None:
@@ -278,6 +290,8 @@ def preprocess_data_all_steps(signals: mne.io.RawArray | RawEDF, filename: str, 
     :param folder_name: Folder where pk file should be stored
     """
     data = create_reference_electrode(signals)
+    # drops all channels which are not common across all datasets
+    data = drop_channels(data)
     data = filter_mne(data)
     data = resample_signal(data, original_sample_rate=signals.info['sfreq'])
     data = scale_values(data)
