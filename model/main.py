@@ -44,14 +44,14 @@ def show_result(study: optuna.Study) -> None:
 
 
 def main():
-    # study = optuna.create_study(
-    #     direction="maximize", pruner=optuna.pruners.MedianPruner(n_startup_trials=2)
-    # )
-    #
-    # study.optimize(objective, n_trials=25, timeout=600, gc_after_trial=True)
-    #
-    # show_result(study)
-    test_model()
+    study = optuna.create_study(
+        direction="maximize", pruner=optuna.pruners.MedianPruner(n_startup_trials=2)
+    )
+    study.optimize(objective, n_trials=25, timeout=600, gc_after_trial=True)
+    show_result(study)
+
+    # acc_avg = test_model()
+    # print(acc_avg)
 
 
 if __name__ == "__main__":

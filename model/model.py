@@ -23,14 +23,22 @@ def create_model(
     :raises optuna.exceptions.TrialPruned: If the dimensions after convolution or pooling become invalid.
     """
     n_conv_layers = trial.suggest_int('n_conv_layers', 1, 3)
-    filters = trial.suggest_int('filters', 16, 128, step=16)
-    filter_size = trial.suggest_int('filter_size', 2, min(input_shape[0], input_shape[1]) // 2)
-    strides_conv = trial.suggest_int('strides_conv', 1, 2)
-    pool_size = trial.suggest_int('pool_size', 2, 3)
-    strides_pool = trial.suggest_int('strides_pool', 1, 2)
-    lstm_units = trial.suggest_int('lstm_units', 64, 256, step=64)
+    filters = trial.suggest_int('filters', 16, 80, step=16)
+    # filter_size = trial.suggest_int('filter_size', 2, 5)
+    filter_size = 3
+    # strides_conv = trial.suggest_int('strides_conv', 1, 2)
+    strides_conv = 1
+    # pool_size = trial.suggest_int('pool_size', 2, 3)
+    pool_size = 2
+    # strides_pool = trial.suggest_int('strides_pool', 1, 2)
+    strides_pool = 2
+    lstm_units = trial.suggest_int('lstm_units', 64, 192, step=64)
     dropout_rate = trial.suggest_float('dropout_rate', 0.1, 0.5)
     l2_reg = trial.suggest_float('l2_reg', 1e-5, 1e-2, log=True)
+
+    print(f"Trial Parameters: n_conv_layers={n_conv_layers}, filters={filters}, filter_size={filter_size}, "
+          f"strides_conv={strides_conv}, pool_size={pool_size}, strides_pool={strides_pool}, "
+          f"lstm_units={lstm_units}, dropout_rate={dropout_rate}, l2_reg={l2_reg}")
 
     height, width = input_shape[0], input_shape[1]
     padding = 'same'  # Using same padding for consistent dimensions
@@ -39,13 +47,13 @@ def create_model(
         if padding == 'same':
             height = height // strides_conv
             width = width // strides_conv
-            height = height // strides_pool
-            width = width // strides_pool
+            height = height // pool_size
+            width = width // pool_size
         else:
             height = (height - filter_size) // strides_conv + 1
             width = (width - filter_size) // strides_conv + 1
-            height = (height - pool_size) // strides_pool + 1
-            width = (width - pool_size) // strides_pool + 1
+            height = (height - pool_size) // pool_size + 1
+            width = (width - pool_size) // pool_size + 1
 
         if height <= 0 or width <= 0:
             raise optuna.exceptions.TrialPruned(f"Invalid dimensions after layer {i + 1}.")
@@ -60,7 +68,7 @@ def create_model(
         filter_size=filter_size,
         strides_conv=strides_conv,
         pool_size=pool_size,
-        strides_pool=strides_pool,
+        strides_pool=pool_size,
         lstm_units=lstm_units,
         dropout_rate=dropout_rate,
         l2_reg=l2_reg,
@@ -108,6 +116,9 @@ def create_time_distributed_lstm_cnn(
     :param debug: If True, prints the dimensions of the data after each layer for debugging purposes.
     :return: A compiled Keras Model ready for training.
     """
+    if debug:
+        print(f"Parameters: ")
+
     inputs = tf.keras.Input(shape=(None, *input_shape))
     x = inputs
     if debug:
