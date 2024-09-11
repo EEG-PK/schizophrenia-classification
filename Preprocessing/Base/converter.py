@@ -29,8 +29,7 @@ def get_signals_from_csv(filename: str, sample_frequency: int = 1024) -> Generat
     df: pd.DataFrame
     for df in pd.read_csv(filename, names=csv_labels, chunksize=3072):
         # if condition is other than 2 (passive listing to tone) skip the data
-        # FIXME: change number 1 to 2
-        if df.loc[df['condition'] != 1].size != 0:
+        if df.loc[df['condition'] != 2].size != 0:
             continue
         # get only columns which are in common channels in all datasets
         relevant_data = df.iloc[:, 4:-6]
