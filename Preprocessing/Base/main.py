@@ -1,5 +1,9 @@
-from converter import *
-from plotter import plot_signal
-from joblib import dump, load
+from converter import process_folder
+from joblib import load
+process_folder('Data','Csv', 'health')
 
-process_folder('Data','eea', 'eea_good')
+# test = load('./CsvData/eeg_Csv_health.pk')
+# # print(test)
+# print(len(test))
+# print(list(test[0].keys()))
+

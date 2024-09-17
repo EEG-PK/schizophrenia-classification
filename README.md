@@ -34,18 +34,32 @@ This study aims to classify schizophrenia using convolutional neural networks (C
 - Number of instances of normal: 13
 
 ## Code
-What we use: frameworks, versions, etc.
+The model was trained on Debian 12 on the GPU.
+The code was tested on Python3.11 and CUDA 12.2.<br>
+CUDA and cudnn are installed in the conda environment. All you need is NVIDIA drivers compatible with at least CUDA 12.2 and the Linux environment.
+
+### Setup
+#### 1) Create environment
+Conda<br>
+`conda env create --file ml_eeg_gpu_tf215.yml`
+#### 2) Set the `LD_LIBRARY_PATH` environment variable
+```bash
+chmod +x env_create.sh
+./env_create.sh
+conda deactivate
+conda activate ml_eeg_gpu_tf215
+```
+#### 3) Fix tftb library compatibility
+`python tftb_repair.py`
 
 ## Tasks
-### Task 1: EEG signal preparation/preprocessing
+### Task 1: EEG signal preparation/preprocessing<a id='task-1'></a>
+Go to the `preprocessing` folder.
+
 ### Task 2: Schizophrenia prediction
-
-
-## Installing dependencies
-It was tested with python3.12<br>
-To install all required dependencies run:
-- Virtual env <br>
-`pip install -r requirements.txt` (in your python environment)
-<br>
-- Conda <br>
-`conda env create -n [env_name] --file [env_file.yml]` (to create conda environment)
+1. Prepare data according to [preprocessing](#task-1) step.<br>
+2. Go to the `model` folder.
+#### Training
+`python training.py`
+#### Testing
+`python test.py`

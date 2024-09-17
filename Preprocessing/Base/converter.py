@@ -1,13 +1,12 @@
-import math
+from sys import getsizeof
 
 import mne
 import pandas as pd
-from dateutil.relativedelta import relativedelta
 from mne.io import read_raw_edf
-from typing import List, Literal, Generator
+from mne.utils import set_log_level
+from typing import List, Literal, Generator, Dict, Any
 
 from mne.io.edf.edf import RawEDF
-from scipy.signal import resample_poly, decimate
 from tftb.processing import MargenauHillDistribution
 import numpy as np
 from joblib import dump
@@ -89,8 +88,8 @@ def drop_channels(signals: RawEDF | mne.io.RawArray) -> mne.io.RawArray | RawEDF
 
     :param signals:
     """
-    signals.copy().drop_channels(set(signals.ch_names) - set(common_channels))
-    return signals
+    signal_copy = signals.copy().drop_channels(set(signals.ch_names) - set(common_channels))
+    return signal_copy
 
 
 def create_reference_electrode(signals: mne.io.RawArray | RawEDF) -> mne.io.RawArray | RawEDF:
@@ -116,17 +115,17 @@ def filter_mne(signals: mne.io.RawArray | RawEDF, cutoff_freq: int = 40) -> mne.
     return signals
 
 
-def save_to_pickle_file(signals: dict[str, np.ndarray[float]], filename: str, folder_name: str) -> None:
+def save_to_pickle_file(object_to_dump: Any, filename: str, folder_name: str) -> None:
     """
     Saves all the signals into dictionary format to pickle file.
 
-    :param signals: Signals
+    :param object_to_dump: Any valid python object
     :param filename: Filename of file
     :param folder_name: Folder in which data should be saved. If folder doesn't exist it will be created.
     """
     if not os.path.exists(folder_name):
         os.mkdir(folder_name)
-    dump(signals, f"{folder_name}/{filename}")
+    dump(object_to_dump, f"{folder_name}/{filename}")
 
 
 def resample_signal(signals: mne.io.RawArray | RawEDF, original_sample_rate: int,
@@ -203,7 +202,7 @@ def scale_values(signals: mne.io.RawArray | RawEDF, min_val: float = -1, max_val
 
 
 def split_into_time_windows(signals: mne.io.RawArray, sample_frequency: int, secs: float = 3) -> Generator[
-    dict[str,np.ndarray[float]], None, None]:
+    dict[str, np.ndarray[float]], None, None]:
     """
     Returns some time window from signal. It's generator for simplicity’s sake.
 
@@ -217,76 +216,88 @@ def split_into_time_windows(signals: mne.io.RawArray, sample_frequency: int, sec
 
     for chunk in epochs:
         # zips chunks into dict
-        yield dict(zip(epochs.ch_names,chunk))
-
-    # data = signals.get_data()
-    # time = len(data[0]) / sample_frequency
-    #
-    # chunks = int(time // 3)
-    #
-    # for i in range(chunks - 1):
-    #     # [chunk_start : chunk_end]
-    #     chunk_start = int((secs * sample_frequency) * i)
-    #     chunk_end = int((secs * sample_frequency) * (i + 1))
-    #     mapped_data = list(map(lambda x: x[chunk_start:chunk_end], data))
-    #     info = mne.create_info(
-    #         ch_types=signals.get_channel_types(),
-    #         sfreq=signals.info['sfreq'],
-    #         ch_names=signals.ch_names)
-    #     raw_data = mne.io.RawArray(mapped_data, info)
-    #
-    #     yield raw_data
-    #
-    # mapped_data = list(map(lambda x: x[int((secs * sample_frequency) * (chunks - 1)):], data))
-    # info = mne.create_info(
-    #     ch_types=signals.get_channel_types(),
-    #     sfreq=signals.info['sfreq'],
-    #     ch_names=signals.ch_names
-    # )
-    # info.set_montage('standard_1020')
-    # raw_data = mne.io.RawArray(mapped_data, info)
-    #
-    # yield raw_data
+        yield dict(zip(epochs.ch_names, chunk))
 
 
-def process_folder(folder_name: str, mode: Literal['edf', 'csv', 'eea'], output_folder: str = None) -> None:
+def cast_from_mne_to_dict(signals: mne.io.RawArray | RawEDF) -> Dict[str, np.ndarray]:
+    return dict(zip(signals.ch_names, signals.get_data()))
+
+
+def progress_bar(iterable, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd="\r"):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iterable    - Required  : iterable object (Iterable)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
+    """
+    total = len(iterable)
+
+    # Progress Bar Printing Function
+    def print_progress_bar(iteration):
+        percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+        filledLength = int(length * iteration // total)
+        bar = fill * filledLength + '-' * (length - filledLength)
+        print(f'\r{prefix} |{bar}| {percent}% {suffix}', end=printEnd)
+
+    # Initial Call
+    print_progress_bar(0)
+    # Update Progress Bar
+    for i, item in enumerate(iterable):
+        yield item
+        print_progress_bar(i + 1)
+    # Print New Line on Complete
+    print()
+
+
+def process_folder(folder_name: str, mode: Literal['Edf', 'Csv', 'Eea'],
+                   patient_state: Literal['health', 'schizophrenia'], output_folder: str = None) -> None:
     """
     Main function. Read all files from provided folder and process them.
     If output_folder is not provided, it will use default one.
 
+    :param patient_state: Information about the state of patients processed. Needed for file save.
     :param output_folder: Folder where data should be saved.
     :param folder_name: Folder which stores all the files
     :param mode: File extension which are in the folder. THERE SHOULDN'T BE MORE THAN ONE FILE TYPE IN FOLDER
     """
     file_names = os.listdir(folder_name)
+    set_log_level("Critical")
+    object_dump = []
 
-    if mode == 'edf':
-        for file_name in file_names:
+    if mode == 'Edf':
+        for file_name in progress_bar(file_names, prefix='Progress: '):
             data = get_signals_from_edf(os.path.join(folder_name, file_name))
-            preprocess_data_all_steps(data, file_name[:file_name.index('.')],
-                                      output_folder if output_folder is not None else 'EdfData')
-    elif mode == 'csv':
-        for file_name in file_names:
+            processed_data = preprocess_data_all_steps(data)
+            object_dump.append(processed_data)
+    elif mode == 'Csv':
+        for file_name in progress_bar(file_names, prefix='Progress: '):
             data = get_signals_from_csv(os.path.join(folder_name, file_name))
             for index, signal_chunk in enumerate(data):
-                file_name_no_extension = file_name[:file_name.index('.')]
-                preprocess_data_all_steps(signal_chunk, f'{file_name_no_extension}_chunk_{index}',
-                                          output_folder if output_folder is not None else 'CsvData')
-                print(f'Processed {index}')
-    elif mode == 'eea':
-        for file_name in file_names:
+                processed_data = preprocess_data_all_steps(signal_chunk)
+                object_dump.append(processed_data)
+    elif mode == 'Eea':
+        for file_name in progress_bar(file_names, prefix='Progress: '):
             data = get_signals_from_eea(os.path.join(folder_name, file_name))
-            preprocess_data_all_steps(data, file_name[:file_name.index('.')],
-                                      output_folder if output_folder is not None else 'EeaData')
+            processed_data = preprocess_data_all_steps(data)
+            object_dump.append(processed_data)
+
+    if output_folder is not None:
+        save_to_pickle_file(object_dump, f'eeg_{mode}_{patient_state}.pk', output_folder)
+    else:
+        save_to_pickle_file(object_dump, f'eeg_{mode}_{patient_state}.pk', f'{mode}Data')
 
 
-def preprocess_data_all_steps(signals: mne.io.RawArray | RawEDF, filename: str, folder_name: str):
+def preprocess_data_all_steps(signals: mne.io.RawArray | RawEDF) -> Dict[
+    str, np.ndarray]:
     """
     Main pipeline for preprocessing
 
     :param signals: Signals from files in RawArray or RawEDF
-    :param filename: Filename of pk file
-    :param folder_name: Folder where pk file should be stored
     """
     data = create_reference_electrode(signals)
     # drops all channels which are not common across all datasets
@@ -294,8 +305,7 @@ def preprocess_data_all_steps(signals: mne.io.RawArray | RawEDF, filename: str, 
     data = filter_mne(data)
     data = resample_signal(data, original_sample_rate=signals.info['sfreq'])
     data = scale_values(data)
-    for index, time_window in enumerate(split_into_time_windows(data, sample_frequency=data.info['sfreq'])):
-        save_to_pickle_file(time_window, f"{filename}_{index}.pk", folder_name)
+    return cast_from_mne_to_dict(data)
 
 
 def calculate_margenau_lib(signal: List[float]) -> List[List[float]]:
