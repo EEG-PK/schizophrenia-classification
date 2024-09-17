@@ -1,0 +1,66 @@
+name: Schizophrenia classification
+
+on:
+  push:
+    branches: [ "main", "development" ]
+  pull_request:
+    branches: [ "main", "development" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu"]
+
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniconda-version: "latest"
+          channels: conda-forge,defaults,nvidia/label/cuda-12.2.2
+          activate-environment: ml_eeg_gpu_tf215_ver
+          environment-file: ml_eeg_gpu_tf215_ver.yml
+          auto-activate-base: false
+          python-version: 3.11
+          show-channel-urls: true
+
+      - name: Conda info
+        run: conda info
+      - name: Conda list
+        run: conda list
+
+      - name: Lint
+        run: |
+            conda install flake8
+            python -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+            python -m flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: LD_LIBRARY_PATH env variable creation
+        run: |
+          chmod +x env_create.sh
+          ./env_create.sh
+          export OLD_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
+          export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$OLD_LD_LIBRARY_PATH
+
+      - name: Run tftb repair
+        run: python tftb_repair.py
+
+      - name: PyTests - cuda config
+        run: |
+          conda install pytest
+          pytest tests/test_tensorflow_setup.py
+
+      - name: PyTests - tftb files
+        run: |
+          pytest tests/tftb.py
