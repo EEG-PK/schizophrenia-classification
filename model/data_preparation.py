@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Tuple
 import numpy as np
 import tensorflow as tf
 import joblib
+import cv2
 
 # TODO: Replace the mhd function
 from mhd_temp import margenau_hill_distribution_spectrogram_tfrmhs_ifft as mhd
@@ -91,15 +92,18 @@ def preprocess_eeg_sample(sample: Dict[str, np.ndarray]) -> Tuple[np.ndarray, fl
     return np.array(processed_segments), label
 
 
-def signal_to_image(signal: np.ndarray) -> np.ndarray:
+def signal_to_mhd_image(signal: np.ndarray, size: tuple = None, range: tuple = None) -> np.ndarray:
     """
     Converts a 1D signal into a 2D image using the Margenau-Hill distribution.
 
     The signal is transformed into an image representation using the
-    Margenau-Hill distribution, scaled to a range of 0-1.
+    Margenau-Hill distribution, scaled to a specified size and range.
 
     :param signal: A 1D numpy array representing the EEG signal for a single channel.
-    :return: A 2D numpy array of type uint8, representing the signal as an image.
+    :param size: A tuple specifying the desired size (height, width) of the output image.
+                 Default is (N/2 x N), where N is len of the signal.
+    :param range: A tuple specifying the desired range (min, max) of the output image values.
+    :return: A 2D numpy array of the specified size, representing the signal as an image.
 
     Note:
         - Mirror frequencies are cropped (N/2, N)
@@ -108,12 +112,11 @@ def signal_to_image(signal: np.ndarray) -> np.ndarray:
     mh_distribution = abs(mh_distribution)
     mh_distribution = mh_distribution[:(mh_distribution.shape[0] // 2), :]
 
-    img = scale_minmax(mh_distribution, 0, 1)
-    # I think that further conversion is not needed since we do not use pretreated image models
-    # img = scale_minmax(mh_distribution, 0, 255).astype(np.uint8)
-    # img = np.flip(img, axis=0)
-    # img = 255 - img
-    return img
+    if size:
+        mh_distribution = cv2.resize(mh_distribution, (size[1], size[0]), interpolation=cv2.INTER_AREA)
+    if range:
+        mh_distribution = scale_minmax(mh_distribution, range[0], range[1])
+    return mh_distribution
 
 
 def scale_minmax(X: np.ndarray, min: float = 0.0, max: float = 1.0) -> np.ndarray:
