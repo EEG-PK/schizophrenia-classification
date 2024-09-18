@@ -4,7 +4,7 @@ import tensorflow as tf
 
 from mockup_data import mockup
 from params import DATASET, DATASETS_DIR
-from training import objective, test_model
+from training import objective
 
 
 def show_result(study: optuna.Study) -> None:
@@ -63,9 +63,6 @@ def main():
     )
     study.optimize(objective, n_trials=25, timeout=600, gc_after_trial=True)
     show_result(study)
-
-    # acc_avg = test_model()
-    # print(acc_avg)
 
 
 if __name__ == "__main__":
