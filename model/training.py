@@ -2,6 +2,7 @@ from datetime import datetime
 
 import numpy as np
 import optuna
+from keras.src.callbacks import EarlyStopping
 from sklearn.model_selection import StratifiedKFold
 import tensorflow as tf
 from tensorflow.keras import layers, models, callbacks
@@ -17,6 +18,12 @@ data, labels = get_data()
 
 log_dir = "logs/fit/" + datetime.now().strftime("%Y%m%d-%H%M%S")
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+
+early_stopping_callback = EarlyStopping(
+    monitor='val_accuracy',  # alternatively other metrics e.g. ‘val_loss’, ‘val_f1_score’
+    patience=5,
+    restore_best_weights=True
+)
 
 strategy = tf.distribute.MirroredStrategy()
 print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
@@ -99,9 +106,8 @@ def objective(trial: optuna.Trial) -> float:
             steps_per_epoch=steps_per_epoch_train,
             validation_data=val_ds,
             validation_steps=steps_per_epoch_val,
-            verbose=1,
-            callbacks=[tensorboard_callback]
-            # command to run tensorBoard: tensorboard --logdir=logs/fit
+            verbose=2,
+            callbacks=[tensorboard_callback, early_stopping_callback]  # command to run tensorBoard: tensorboard --logdir=logs/fit
         )
 
         y_val_pred = model.predict(val_ds, steps=steps_per_epoch_val)
@@ -179,8 +185,7 @@ def test_model():
             validation_data=val_ds,
             validation_steps=steps_per_epoch_val,
             verbose=2,
-            callbacks=[tensorboard_callback]
-            # command to run tensorBoard: tensorboard --logdir=logs/fit
+            callbacks=[tensorboard_callback, early_stopping_callback]  # command to run tensorBoard: tensorboard --logdir=logs/fit
         )
 
         y_val_pred = model.predict(val_ds, steps=steps_per_epoch_val)
