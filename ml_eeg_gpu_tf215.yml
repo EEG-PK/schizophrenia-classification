@@ -13,7 +13,7 @@ dependencies:
   - mne
   - joblib
   - pillow
-  - opencv-python
+  - opencv
   - nvidia/label/cuda-12.2.2::cuda-toolkit=12.2.2
   - conda-forge::cudnn=8.9
   - pip:
