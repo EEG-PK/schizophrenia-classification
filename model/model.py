@@ -22,7 +22,7 @@ def create_model(
     :return: A compiled Keras model with the suggested hyperparameters.
     :raises optuna.exceptions.TrialPruned: If the dimensions after convolution or pooling become invalid.
     """
-    n_conv_layers = trial.suggest_int('n_conv_layers', 1, 3)
+    n_conv_layers = trial.suggest_int('n_conv_layers', 1, 6)
     filters = trial.suggest_int('filters', 16, 80, step=16)
     # filter_size = trial.suggest_int('filter_size', 2, 5)
     filter_size = 3
@@ -130,20 +130,27 @@ def create_time_distributed_lstm_cnn(
                                    activation='relu', kernel_regularizer=tf.keras.regularizers.L2(l2_reg)))(x)
         x = tf.keras.layers.TimeDistributed(
             tf.keras.layers.MaxPooling2D((pool_size, pool_size), strides=strides_pool))(x)
+        x = tf.keras.layers.TimeDistributed(
+            tf.keras.layers.BatchNormalization())(x)
 
         if debug:
             print(f"After Conv2D layer {i + 1}, shape: {x.shape}")
 
-    x = tf.keras.layers.TimeDistributed(tf.keras.layers.Flatten())(x)
+    x = tf.keras.layers.TimeDistributed(tf.keras.layers.GlobalAveragePooling2D())(x)
     if debug:
-        print(f"After Flatten, shape: {x.shape}")
+        print(f"After Global Average Pooling, shape: {x.shape}")
+
+    # x = tf.keras.layers.TimeDistributed(tf.keras.layers.Flatten())(x)
+    # if debug:
+    #     print(f"After Flatten, shape: {x.shape}")
 
     x = tf.keras.layers.LSTM(lstm_units)(x)
     x = tf.keras.layers.Dropout(dropout_rate)(x)
     if debug:
         print(f"After LSTM, shape: {x.shape}")
 
-    outputs = tf.keras.layers.Dense(1, activation='sigmoid')(x)
+    x = tf.keras.layers.Dense(1, name='dense_logits')(x)
+    outputs = tf.keras.layers.Activation('sigmoid', dtype='float32', name='predictions')(x)
 
     model = tf.keras.Model(inputs=inputs, outputs=outputs)
     return model

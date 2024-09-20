@@ -13,6 +13,7 @@ dependencies:
   - mne=1.8.0 # 0.16.2, 1.8.0
   - joblib=1.4.2
   - pillow=10.4.0
+  - opencv=4.10.0
   - pip
   - pip:
     - tensorflow==2.15.0
