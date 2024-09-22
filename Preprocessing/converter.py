@@ -1,5 +1,3 @@
-from sys import getsizeof
-
 import mne
 import pandas as pd
 from mne.io import read_raw_edf
@@ -219,12 +217,15 @@ def split_into_time_windows(signals: mne.io.RawArray, sample_frequency: int, sec
         yield dict(zip(epochs.ch_names, chunk))
 
 
-def cast_from_mne_to_dict(signals: mne.io.RawArray | RawEDF) -> Dict[str, np.ndarray]:
-    return dict(zip(signals.ch_names, signals.get_data()))
+def cast_from_mne_to_dict(signals: mne.io.RawArray | RawEDF, file_name: str) -> Dict[str, Any]:
+    return {'id': file_name, 'eeg': dict(zip(signals.ch_names, signals.get_data()))}
 
 
 def progress_bar(iterable, prefix='', suffix='', decimals=1, length=100, fill='â–ˆ', printEnd="\r"):
     """
+    This function is taken from stack overflow:
+    https://stackoverflow.com/questions/3173320/text-progress-bar-in-terminal-with-block-characters
+
     Call in a loop to create terminal progress bar
     @params:
         iterable    - Required  : iterable object (Iterable)
@@ -254,37 +255,87 @@ def progress_bar(iterable, prefix='', suffix='', decimals=1, length=100, fill='â
     print()
 
 
-def process_folder(folder_name: str, mode: Literal['Edf', 'Csv', 'Eea'],
-                   patient_state: Literal['health', 'schizophrenia'], output_folder: str = None) -> None:
+def process_edf(input_folder: str, file_name: str) -> Dict[str, np.ndarray]:
+    """
+    Process single EDF file
+
+    :param input_folder: Folder where file is located
+    :param file_name: File name
+    :return: Dictionary of EDF data
+    """
+    data = get_signals_from_edf(os.path.join(input_folder, file_name))
+    processed_data = preprocess_data_all_steps(data, file_name)
+    return processed_data
+
+
+def process_eea(input_folder: str, file_name: str) -> Dict[str, np.ndarray]:
+    """
+    Process single EEA file
+
+    :param input_folder: Folder where file is located
+    :param file_name: File name
+    :return: Dictionary of EEA data
+    """
+    data = get_signals_from_eea(os.path.join(input_folder, file_name))
+    processed_data = preprocess_data_all_steps(data, file_name)
+    return processed_data
+
+
+def process_csv(input_folder: str, file_name: str) -> List[Dict[str, np.ndarray]]:
+    """
+    Process single CSV file
+
+    :param input_folder: Folder where file is located
+    :param file_name: File name
+    :return: List of dictionaries containing signals.
+    """
+    tmp_dump = []
+    data = get_signals_from_csv(os.path.join(input_folder, file_name))
+    for index, signal_chunk in enumerate(data):
+        processed_data = preprocess_data_all_steps(signal_chunk, f"chunk_{index + 1}_{file_name}")
+        tmp_dump.append(processed_data)
+    return tmp_dump
+
+
+def process_folder(input_folder: str, mode: Literal['Edf', 'Csv', 'Eea', 'All'],
+                   patient_state: Literal['health', 'ill'], output_folder: str = None) -> None:
     """
     Main function. Read all files from provided folder and process them.
     If output_folder is not provided, it will use default one.
 
     :param patient_state: Information about the state of patients processed. Needed for file save.
     :param output_folder: Folder where data should be saved.
-    :param folder_name: Folder which stores all the files
+    :param input_folder: Folder which stores all the files
     :param mode: File extension which are in the folder. THERE SHOULDN'T BE MORE THAN ONE FILE TYPE IN FOLDER
     """
-    file_names = os.listdir(folder_name)
+    file_names = os.listdir(input_folder)
     set_log_level("Critical")
     object_dump = []
 
     if mode == 'Edf':
         for file_name in progress_bar(file_names, prefix='Progress: '):
-            data = get_signals_from_edf(os.path.join(folder_name, file_name))
-            processed_data = preprocess_data_all_steps(data)
-            object_dump.append(processed_data)
+            data = process_edf(input_folder, file_name)
+            object_dump.append(data)
     elif mode == 'Csv':
         for file_name in progress_bar(file_names, prefix='Progress: '):
-            data = get_signals_from_csv(os.path.join(folder_name, file_name))
-            for index, signal_chunk in enumerate(data):
-                processed_data = preprocess_data_all_steps(signal_chunk)
-                object_dump.append(processed_data)
+            data = process_csv(input_folder, file_name)
+            object_dump.extend(data)
     elif mode == 'Eea':
         for file_name in progress_bar(file_names, prefix='Progress: '):
-            data = get_signals_from_eea(os.path.join(folder_name, file_name))
-            processed_data = preprocess_data_all_steps(data)
-            object_dump.append(processed_data)
+            data = process_eea(input_folder, file_name)
+            object_dump.append(data)
+    elif mode == 'All':
+        for file_name in progress_bar(file_names, prefix='Progress: '):
+            extension = file_name.split('.')[1]
+            if extension == 'csv':
+                data = process_csv(input_folder, file_name)
+                object_dump.extend(data)
+            elif extension == 'eea':
+                data = process_eea(input_folder, file_name)
+                object_dump.append(data)
+            elif extension == 'edf':
+                data = process_edf(input_folder, file_name)
+                object_dump.append(data)
 
     if output_folder is not None:
         save_to_pickle_file(object_dump, f'eeg_{mode}_{patient_state}.pk', output_folder)
@@ -292,11 +343,12 @@ def process_folder(folder_name: str, mode: Literal['Edf', 'Csv', 'Eea'],
         save_to_pickle_file(object_dump, f'eeg_{mode}_{patient_state}.pk', f'{mode}Data')
 
 
-def preprocess_data_all_steps(signals: mne.io.RawArray | RawEDF) -> Dict[
+def preprocess_data_all_steps(signals: mne.io.RawArray | RawEDF, file_name: str) -> Dict[
     str, np.ndarray]:
     """
     Main pipeline for preprocessing
 
+    :param file_name: Name of file which is processed
     :param signals: Signals from files in RawArray or RawEDF
     """
     data = create_reference_electrode(signals)
@@ -305,7 +357,7 @@ def preprocess_data_all_steps(signals: mne.io.RawArray | RawEDF) -> Dict[
     data = filter_mne(data)
     data = resample_signal(data, original_sample_rate=signals.info['sfreq'])
     data = scale_values(data)
-    return cast_from_mne_to_dict(data)
+    return cast_from_mne_to_dict(data, file_name)
 
 
 def calculate_margenau_lib(signal: List[float]) -> List[List[float]]:
