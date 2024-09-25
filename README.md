@@ -55,6 +55,17 @@ conda activate ml_eeg_gpu_tf215
 ## Tasks
 ### Task 1: EEG signal preparation/preprocessing<a id='task-1'></a>
 Go to the `preprocessing` folder.
+1. Download all datasets using command:<br>
+`python dataset_setup.py`
+
+This command will automatically download and unzip all datasets into appropriate folders
+2. After that run <br>
+`python main.py -m {mode} -ps {patient_state} -i {folder_path}`<br>
+or move all files to one folder and run<br>
+`python main.py -m all -ps {patient_state} -i {folder_path}`<br>
+By default all file should be contained folder called Data in root of preprocessing folder.
+
+What is important that in one folder there can only one state of patients (either healthy or ill). 
 
 ### Task 2: Schizophrenia prediction
 1. Prepare data according to [preprocessing](#task-1) step.<br>
