@@ -62,7 +62,10 @@ This command will automatically download and unzip all datasets into appropriate
 2. After that run <br>
 `python main.py -m {mode} -ps {patient_state} -i {folder_path}`<br>
 or move all files to one folder and run<br>
-`python main.py -m all -ps {patient_state} -i {folder_path}`<br>
+`python main.py -m all -ps {patient_state} -i {folder_path}`<br><br>
+For example, for 'number 3' (_.eea_) dataset:<br>
+`python main.py -m Eea -ps health -i Datasets/EeaHealthy`<br>
+`python main.py -m Eea -ps ill -i Datasets/EeaIll`<br><br>
 By default all file should be contained folder called Data in root of preprocessing folder.
 
 What is important that in one folder there can only one state of patients (either healthy or ill). 
