@@ -2,8 +2,6 @@ import optuna
 from optuna.trial import TrialState
 import tensorflow as tf
 
-from mockup_data import mockup
-from params import DATASET, DATASETS_DIR
 from training import objective
 
 
@@ -32,31 +30,26 @@ def show_result(study: optuna.Study) -> None:
 
 
 def main():
-    #TODO: Disable eagerly mode
+    #TODO: Disable eagerly mode and uncomment gpu stuff
+
     tf.config.run_functions_eagerly(False)
     # tf.data.experimental.enable_debug_mode()
 
-    gpus = tf.config.list_physical_devices('GPU')
-    if gpus:
-        try:
-            # Currently, memory growth needs to be the same across GPUs
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-            logical_gpus = tf.config.list_logical_devices('GPU')
-            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
-        except RuntimeError as e:
-            # Memory growth must be set before GPUs have been initialized
-            print(e)
+    # gpus = tf.config.list_physical_devices('GPU')
+    # if gpus:
+    #     try:
+    #         # Currently, memory growth needs to be the same across GPUs
+    #         for gpu in gpus:
+    #             tf.config.experimental.set_memory_growth(gpu, True)
+    #         logical_gpus = tf.config.list_logical_devices('GPU')
+    #         print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+    #     except RuntimeError as e:
+    #         # Memory growth must be set before GPUs have been initialized
+    #         print(e)
 
     print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
     print("CUDA Version: ", tf.sysconfig.get_build_info()["cuda_version"])
     print("cuDNN Version: ", tf.sysconfig.get_build_info()["cudnn_version"])
-
-    # TODO: Replace to proper data load
-    data_dir = 'data'
-    schizophrenia_files = ['33w1.eea', '088w1.eea', '103w.eea', '33w1.eea', '088w1.eea', '103w.eea']
-    health_files = ['088w1.eea', '103w.eea', '088w1.eea', '103w.eea', '088w1.eea', '103w.eea']
-    mockup(data_dir, schizophrenia_files, health_files, dataset_dir=f"{DATASETS_DIR}/{DATASET}")
 
     study = optuna.create_study(
         direction="maximize", pruner=optuna.pruners.MedianPruner(n_startup_trials=2)

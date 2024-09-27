@@ -6,7 +6,7 @@ import cv2
 
 # TODO: Replace the mhd function
 from mhd_temp import margenau_hill_distribution_spectrogram_tfrmhs_ifft as mhd
-from params import SEGMENT_SIZE_SEC, SAMPLING_RATE, SEGMENT_COLUMNS, SEGMENT_ROWS, CHANNEL_NUMBER, DATASETS_DIR, \
+from params import SEGMENT_SIZE_SEC, SAMPLING_RATE, SEGMENT_COLUMNS, SEGMENT_ROWS, DATASETS_DIR, \
     DATASET, SCHIZO_DUMP_FILE, HEALTH_DUMP_FILE, COMMON_CHANNELS
 
 
@@ -37,10 +37,10 @@ def load_and_segment_eeg_data(filepaths: List[str], segment_size: int = SEGMENT_
     for filepath in filepaths:
         eeg_data = load_eeg_data(filepath)
         for sample in eeg_data:
-            segments = segment_signal(sample['eeg'], segment_size, sampling_rate)
+            # segments = segment_signal(sample['eeg'], segment_size, sampling_rate)
             # TODO: Change the signals structure.
-            # channels = np.array([sample['eeg'][channel] for channel in channel_list if channel in sample['eeg']])
-            # segments = segment_signal(channels, segment_size, sampling_rate)
+            channels = np.array([sample['eeg'][channel] for channel in channel_list if channel in sample['eeg']])
+            segments = segment_signal(channels, segment_size, sampling_rate)
             segmented_data.append({'segments': segments, 'label': np.float32(label)})  # Add label from arg
     return segmented_data
 
@@ -61,7 +61,7 @@ def segment_signal(signal: np.ndarray, segment_size: int, sampling_rate: int) ->
 
 
 def get_data():
-    # Data loading
+    print("Data loading and segmentation")
     train_files_schizophrenia = [f"{DATASETS_DIR}/{DATASET}/{SCHIZO_DUMP_FILE}"]
     train_files_health = [f"{DATASETS_DIR}/{DATASET}/{HEALTH_DUMP_FILE}"]
 
@@ -72,13 +72,11 @@ def get_data():
     np.random.shuffle(segmented_signals_data)
 
     # Segments to M-H distribution
+    print("Segments to M-H distribution")
     for signal in segmented_signals_data:
         signal["segments"] = preprocess_eeg_sample(signal["segments"])
 
-    # Preparing labels
-    labels = np.array([sample['label'] for sample in segmented_signals_data])
-
-    return segmented_signals_data, labels
+    return segmented_signals_data
 
 
 def preprocess_eeg_sample(sample: [np.ndarray]) -> np.ndarray:
@@ -183,7 +181,7 @@ def create_eeg_dataset(data: List[Dict[str, np.ndarray]], batch_size: int, shuff
             yield sample["segments"], np.expand_dims(sample["label"], axis=-1)
 
     output_signature = (
-        tf.TensorSpec(shape=(None, SEGMENT_ROWS, SEGMENT_COLUMNS, CHANNEL_NUMBER), dtype=tf.float32),
+        tf.TensorSpec(shape=(None, SEGMENT_ROWS, SEGMENT_COLUMNS, len(COMMON_CHANNELS)), dtype=tf.float32),
         tf.TensorSpec(shape=(1,), dtype=tf.float32)
     )
 

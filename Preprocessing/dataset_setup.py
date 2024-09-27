@@ -118,9 +118,9 @@ def process_csv_files():
 
 def provide_folder_name(zip_name: str) -> str:
     if zip_name == "eeg_ill.zip":
-        return f"{folder_to_save_datasets}/EaaIll"
+        return f"{folder_to_save_datasets}/EeaIll"
     elif zip_name == "eeg_health.zip":
-        return f"{folder_to_save_datasets}/EaaHealthy"
+        return f"{folder_to_save_datasets}/EeaHealthy"
     elif zip_name == "edf_data.zip":
         return f"{folder_to_save_datasets}/EdfData"
     elif zip_name == "csv_data_one.zip" or zip_name == "csv_data_two.zip":
@@ -129,13 +129,16 @@ def provide_folder_name(zip_name: str) -> str:
 
 def extract_files():
     for archive_name, url in urls:
-        with zipfile.ZipFile(f"{folder_to_save_datasets}/{archive_name}", 'r') as zip_ref:
-            print(f"Extracting {archive_name}")
-            zip_ref.extractall(provide_folder_name(archive_name))
+        try:
+            with zipfile.ZipFile(f"{folder_to_save_datasets}/{archive_name}", 'r') as zip_ref:
+                print(f"Extracting {archive_name}")
+                zip_ref.extractall(provide_folder_name(archive_name))
+        except zipfile.BadZipFile:
+            print(zipfile.BadZipFile.__name__)
 
 
 if __name__ == '__main__':
-    # download_datasets()
-    # extract_files()
-    # process_edf_files()
+    download_datasets()
+    extract_files()
+    process_edf_files()
     process_csv_files()
