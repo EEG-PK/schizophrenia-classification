@@ -58,7 +58,7 @@ Go to the `preprocessing` folder.
 1. Download all datasets using command:<br>
 `python dataset_setup.py`
 
-This command will automatically download and unzip all datasets into appropriate folders
+This command will automatically download and unzip all datasets into appropriate folders<br>
 2. After that run <br>
 `python main.py -m {mode} -ps {patient_state} -i {folder_path}`<br>
 or move all files to one folder and run<br>
