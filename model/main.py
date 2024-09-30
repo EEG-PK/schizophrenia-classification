@@ -30,9 +30,8 @@ def show_result(study: optuna.Study) -> None:
 
 
 def main():
-    #TODO: Disable eagerly mode and uncomment gpu stuff
-
-    tf.config.run_functions_eagerly(False)
+    # DEBUG
+    # tf.config.run_functions_eagerly(True)
     # tf.data.experimental.enable_debug_mode()
 
     # gpus = tf.config.list_physical_devices('GPU')

@@ -5,9 +5,9 @@ import joblib
 import cv2
 
 # TODO: Replace the mhd function
-from mhd_temp import margenau_hill_distribution_spectrogram_tfrmhs_ifft as mhd
+from mhd_temp import margenau_hill_distribution as mhd
 from params import SEGMENT_SIZE_SEC, SAMPLING_RATE, SEGMENT_COLUMNS, SEGMENT_ROWS, DATASETS_DIR, \
-    DATASET, SCHIZO_DUMP_FILE, HEALTH_DUMP_FILE, COMMON_CHANNELS
+    DATASET_DIR, SCHIZO_DUMP_FILE, HEALTH_DUMP_FILE, COMMON_CHANNELS
 
 
 def load_eeg_data(filepath: str) -> List[Dict[str, Any]]:
@@ -37,8 +37,6 @@ def load_and_segment_eeg_data(filepaths: List[str], segment_size: int = SEGMENT_
     for filepath in filepaths:
         eeg_data = load_eeg_data(filepath)
         for sample in eeg_data:
-            # segments = segment_signal(sample['eeg'], segment_size, sampling_rate)
-            # TODO: Change the signals structure.
             channels = np.array([sample['eeg'][channel] for channel in channel_list if channel in sample['eeg']])
             segments = segment_signal(channels, segment_size, sampling_rate)
             segmented_data.append({'segments': segments, 'label': np.float32(label)})  # Add label from arg
@@ -62,8 +60,8 @@ def segment_signal(signal: np.ndarray, segment_size: int, sampling_rate: int) ->
 
 def get_data():
     print("Data loading and segmentation")
-    train_files_schizophrenia = [f"{DATASETS_DIR}/{DATASET}/{SCHIZO_DUMP_FILE}"]
-    train_files_health = [f"{DATASETS_DIR}/{DATASET}/{HEALTH_DUMP_FILE}"]
+    train_files_schizophrenia = [f"{DATASETS_DIR}/{DATASET_DIR}/{SCHIZO_DUMP_FILE}"]
+    train_files_health = [f"{DATASETS_DIR}/{DATASET_DIR}/{HEALTH_DUMP_FILE}"]
 
     # Data segmentation
     segmented_train_data_schizophrenia = load_and_segment_eeg_data(train_files_schizophrenia, label=1)

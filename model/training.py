@@ -39,7 +39,6 @@ early_stopping_callback = EarlyStopping(
     restore_best_weights=True
 )
 
-#TODO: Turn on
 strategy = tf.distribute.MirroredStrategy()
 print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
@@ -122,14 +121,15 @@ def objective(trial: optuna.Trial) -> float:
             validation_data=val_ds,
             validation_steps=steps_per_epoch_val,
             verbose=2,
-            callbacks=[tensorboard_callback, early_stopping_callback]  # command to run tensorBoard: tensorboard --logdir=logs/fit
+            callbacks=[tensorboard_callback, early_stopping_callback]
+            # command to run tensorBoard: tensorboard --logdir=logs/fit
         )
 
         y_val_pred = model.predict(val_ds, steps=steps_per_epoch_val)
         y_val_pred = (np.array(y_val_pred) >= THRESHOLD).astype(int).flatten()
         y_val_true = np.array([sample["label"] for sample in val_data]).astype(int)
         # kappa = cohen_kappa_score(y_val_true, y_val_pred)
-        #TODO: Check if kappa score is correct
+        # TODO: Check if kappa score is correct
         # kappa_v2 = cohen_kappa_score([0,1,1,1], [0,1,1,0])
         # print(f"Cohen's Kappa: {kappa}")
 
