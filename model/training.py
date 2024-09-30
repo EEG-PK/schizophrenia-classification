@@ -34,9 +34,10 @@ log_dir = "logs/fit/" + datetime.now().strftime("%Y%m%d-%H%M%S")
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
 early_stopping_callback = EarlyStopping(
-    monitor='val_accuracy',  # alternatively other metrics e.g. ‘val_loss’, ‘val_f1_score’
+    monitor='val_loss',  # alternatively other metrics e.g. ‘val_loss’, ‘val_f1_score’
     patience=5,
-    restore_best_weights=True
+    restore_best_weights=True,
+    start_from_epoch=5
 )
 
 strategy = tf.distribute.MirroredStrategy()
@@ -89,7 +90,7 @@ def objective(trial: optuna.Trial) -> float:
         train_ds = create_eeg_dataset(train_data, batch_size=batch_size)
         val_ds = create_eeg_dataset(val_data, batch_size=batch_size)
 
-        # Debug
+        # DEBUG
         # for element in val_ds.take(2):
         #     frames, label = element
         #     print("Frames shape:", frames.shape)
@@ -113,6 +114,7 @@ def objective(trial: optuna.Trial) -> float:
                 ], run_eagerly=False)
         model.summary()
 
+        # DEBUG
         # print_layer_output = PrintLayerOutput(val_ds)
         history = model.fit(
             train_ds,
