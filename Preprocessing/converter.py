@@ -10,7 +10,7 @@ import numpy as np
 from joblib import dump
 import os
 
-common_channels = ['F8', 'O2', 'F7', 'O1', 'F4', 'C4', 'P4', 'F3', 'C3', 'P3', 'Cz', 'Pz']
+from model.params import COMMON_CHANNELS
 
 
 def get_signals_from_csv(filename: str, sample_frequency: int = 1024) -> Generator[mne.io.RawArray, None, None]:
@@ -86,7 +86,7 @@ def drop_channels(signals: RawEDF | mne.io.RawArray) -> mne.io.RawArray | RawEDF
 
     :param signals:
     """
-    signal_copy = signals.copy().drop_channels(set(signals.ch_names) - set(common_channels))
+    signal_copy = signals.copy().drop_channels(set(signals.ch_names) - set(COMMON_CHANNELS))
     return signal_copy
 
 
