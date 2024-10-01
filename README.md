@@ -48,7 +48,7 @@ Conda<br>
 chmod +x env_create.sh
 ./env_create.sh
 conda deactivate
-conda activate ml_eeg_gpu_tf215
+conda activate ml_eeg_gpu_tf215_ver
 ```
 #### 3) Fix tftb library compatibility
 `python tftb_repair.py`
