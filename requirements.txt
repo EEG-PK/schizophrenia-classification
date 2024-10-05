@@ -1,7 +1,14 @@
-numpy==2.0.1
-scipy==1.14.0
-tftb
-mne==1.7.1
-scikit-learn==1.5.1
+numpy~=2.0.1
+scipy~=1.14.0
+matplotlib~=3.9.1
 pandas==2.2.2
-matplotlib==3.9.1
+optuna==4.0.0 # 3.6.1, 4.0.0
+optuna-dashboard==0.16.2
+scikit-learn==1.5.1
+mne~=1.7.1
+joblib==1.4.2
+pillow==10.4.0
+opencv-python==4.10.0
+tensorflow==2.15.0
+tftb==0.1.4
+requests~=2.32.3

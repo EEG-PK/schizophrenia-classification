@@ -1,0 +1,22 @@
+name: ml_eeg_gpu_tf215
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - numpy
+  - scipy
+  - matplotlib
+  - pandas
+  - optuna
+  - optuna-dashboard
+  - scikit-learn
+  - mne
+  - joblib
+  - pillow
+  - opencv
+  - nvidia/label/cuda-12.2.2::cuda-toolkit=12.2.2
+  - conda-forge::cudnn=8.9
+  - pip:
+    - tensorflow==2.15.0
+    - tftb
