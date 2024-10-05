@@ -2,7 +2,7 @@ import optuna
 from optuna.trial import TrialState
 import tensorflow as tf
 
-from training import objective_cnn_lstm, objective_cnn
+from training import objective
 
 
 def show_result(study: optuna.Study) -> None:
