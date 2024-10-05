@@ -2,7 +2,8 @@ import optuna
 from optuna.trial import TrialState
 import tensorflow as tf
 
-from training import objective
+from model.params import MODELS
+from training import create_objective
 
 
 def show_result(study: optuna.Study) -> None:
@@ -34,6 +35,7 @@ def main():
     # tf.config.run_functions_eagerly(True)
     # tf.data.experimental.enable_debug_mode()
 
+    # TRY IF GPU MEMORY IS RUNNING OUT
     # gpus = tf.config.list_physical_devices('GPU')
     # if gpus:
     #     try:
@@ -50,13 +52,14 @@ def main():
     print("CUDA Version: ", tf.sysconfig.get_build_info()["cuda_version"])
     print("cuDNN Version: ", tf.sysconfig.get_build_info()["cudnn_version"])
 
-    study = optuna.create_study(
-        study_name="cnn_lstm_v1", storage="sqlite:///schizo_model.db", direction="maximize",
-        pruner=optuna.pruners.MedianPruner(n_startup_trials=5)
-    )
-    study.optimize(objective, n_trials=25, timeout=600, gc_after_trial=True)
-    show_result(study)
-    show_result(study)
+    for model in MODELS:
+        objective = create_objective(model)
+        study = optuna.create_study(
+            study_name=model, storage="sqlite:///schizo_model.db", direction="maximize",
+            pruner=optuna.pruners.MedianPruner(n_startup_trials=5)
+        )
+        study.optimize(objective, n_trials=50, gc_after_trial=True)
+        show_result(study)
 
 
 if __name__ == "__main__":
