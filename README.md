@@ -55,28 +55,32 @@ conda activate ml_eeg_gpu_tf215_ver
 
 ## Tasks
 ### Task 1: EEG signal preparation/preprocessing<a id='task-1'></a>
-Go to the `preprocessing` folder.
-1. Download all datasets using command:<br>
-`python dataset_setup.py`
+1. Go to the `preprocessing` folder.<br>
+`cd preprocessing`
+2. Download all datasets using command:<br>
+`python dataset_setup.py`<br>
+This command will automatically download and unzip all datasets into appropriate folders<br><br>
 
-This command will automatically download and unzip all datasets into appropriate folders<br>
-
-2. After that run<br>
+3. After that run<br>
 `python main.py -m {mode} -ps {patient_state} -i {folder_path}`<br>
 or move all files to one folder and run<br>
 `python main.py -m all -ps {patient_state} -i {folder_path}`<br><br>
 For example, for 'number 3' (_.eea_) dataset:<br>
 `python main.py -m Eea -ps health -i Datasets/EeaHealthy`<br>
 `python main.py -m Eea -ps ill -i Datasets/EeaIll`<br><br>
-By default all file should be contained folder called Data in root of preprocessing folder.
-
+By default all file should be contained folder called Data in root of preprocessing folder.<br>
 What is important that in one folder there can only one state of patients (either healthy or ill). 
 
 ### Task 2: Schizophrenia prediction
 1. Prepare data according to [preprocessing](#task-1) step.<br>
-2. Go to the `model` folder.
-#### Search for optimal hyperparameters
+2. Go to the `model` folder.<br>
+`cd model`
+3. Search for optimal hyperparameters<br>
 `python main.py`
+4. Check out the results<br>
+`optuna-dashboard sqlite:///schizo_model.db`<br>
+Open Optuna's dashboard:<br>
+`http://localhost:8080`
 
 [//]: # (#### Training)
 
