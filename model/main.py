@@ -51,9 +51,11 @@ def main():
     print("cuDNN Version: ", tf.sysconfig.get_build_info()["cudnn_version"])
 
     study = optuna.create_study(
-        direction="maximize", pruner=optuna.pruners.MedianPruner(n_startup_trials=2)
+        study_name="cnn_lstm_v1", storage="sqlite:///schizo_model.db", direction="maximize",
+        pruner=optuna.pruners.MedianPruner(n_startup_trials=5)
     )
     study.optimize(objective, n_trials=25, timeout=600, gc_after_trial=True)
+    show_result(study)
     show_result(study)
 
 
