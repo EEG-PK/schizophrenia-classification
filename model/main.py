@@ -2,7 +2,7 @@ import optuna
 from optuna.trial import TrialState
 import tensorflow as tf
 
-from model.params import MODELS
+from params import MODELS
 from training import create_objective
 
 

@@ -1,4 +1,4 @@
-from model.models import model_cnn_lstm, model_cnn3d
+from models import model_cnn_lstm, model_cnn3d
 
 SEGMENT_SIZE_SEC = 3
 SAMPLING_RATE = 128
