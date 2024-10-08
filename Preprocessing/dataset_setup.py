@@ -5,8 +5,8 @@ import shutil
 import pandas as pd
 
 urls = [
-    ('eeg_ill.zip', 'http://brain.bio.msu.ru/eeg_data/schizophrenia/sch.zip'),
-    ('eeg_health.zip', 'http://brain.bio.msu.ru/eeg_data/schizophrenia/norm.zip'),
+    ('eea_ill.zip', 'http://brain.bio.msu.ru/eeg_data/schizophrenia/sch.zip'),
+    ('eea_health.zip', 'http://brain.bio.msu.ru/eeg_data/schizophrenia/norm.zip'),
     ('edf_data.zip', 'https://repod.icm.edu.pl/api/datasets/251/versions/59/files/download?format=original'),
     ('csv_data_one.zip',
      'https://storage.googleapis.com/kaggle-data-sets/4369/271524/bundle/archive.zip?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=gcp-kaggle-com%40kaggle-161607.iam.gserviceaccount.com%2F20240922%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20240922T210309Z&X-Goog-Expires=259200&X-Goog-SignedHeaders=host&X-Goog-Signature=68f3954b288a5b31f921eb6d807e9cae0a7f49841070bdc7cb563c92bbbbeb0c9a6368a46bf34310b86f5cf2f52b4c1ee95782eb12582e81395249c9305b679cf7a4470a1c3b2e83811e3c798c09268b4da9319752ce55a8d0a7623c96e29ded30d07840349b16eb9e1bf078896f0d4832984217920aa6f9b4a935167238dbb97365bc259ef1a8d890e543e1e65125ecacb099f697b7239a58cf2dca45990fb1a417702c84e973907a21cbaff68346ed7ee386a7c86e5f1ffbc5efa703ac5d8d60ca6df45e21ff9bccd3a565a0dfec95c68c12241015c7b47cc4223a8d0bd8cec5b174b4a35ceddd724ee0ccd559d6f0159af9c8cbb8c7dbccc627a6d9cff454'),
@@ -117,9 +117,9 @@ def process_csv_files():
 
 
 def provide_folder_name(zip_name: str) -> str:
-    if zip_name == "eeg_ill.zip":
+    if zip_name == "eea_ill.zip":
         return f"{folder_to_save_datasets}/EeaIll"
-    elif zip_name == "eeg_health.zip":
+    elif zip_name == "eea_health.zip":
         return f"{folder_to_save_datasets}/EeaHealthy"
     elif zip_name == "edf_data.zip":
         return f"{folder_to_save_datasets}/EdfData"
@@ -140,5 +140,5 @@ def extract_files():
 if __name__ == '__main__':
     download_datasets()
     extract_files()
-    process_edf_files()
-    process_csv_files()
+    # process_edf_files()
+    # process_csv_files()
