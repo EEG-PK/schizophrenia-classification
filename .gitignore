@@ -1,5 +1,5 @@
-model/logs
-Preprocessing/Datasets
+/model/logs
+/Preprocessing/Datasets
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

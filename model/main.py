@@ -2,21 +2,8 @@ import optuna
 from optuna.trial import TrialState
 import tensorflow as tf
 
-from mockup_data import mockup
-from params import DATASET, DATASETS_DIR
-from training import objective, test_model
-
-print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
-print("CUDA Version: ", tf.sysconfig.get_build_info()["cuda_version"])
-print("cuDNN Version: ", tf.sysconfig.get_build_info()["cudnn_version"])
-
-# TODO: Replace to proper data load
-# Data mock-up for now
-data_dir = 'data'
-schizophrenia_files = ['33w1.eea', '088w1.eea', '103w.eea']
-health_files = ['088w1.eea', '103w.eea']
-
-mockup(data_dir, schizophrenia_files, health_files, dataset_dir=f"{DATASETS_DIR}/{DATASET}")
+from model.params import MODELS
+from training import create_objective
 
 
 def show_result(study: optuna.Study) -> None:
@@ -44,14 +31,35 @@ def show_result(study: optuna.Study) -> None:
 
 
 def main():
-    study = optuna.create_study(
-        direction="maximize", pruner=optuna.pruners.MedianPruner(n_startup_trials=2)
-    )
-    study.optimize(objective, n_trials=25, timeout=600, gc_after_trial=True)
-    show_result(study)
+    # DEBUG
+    # tf.config.run_functions_eagerly(True)
+    # tf.data.experimental.enable_debug_mode()
 
-    # acc_avg = test_model()
-    # print(acc_avg)
+    # TRY IF GPU MEMORY IS RUNNING OUT
+    # gpus = tf.config.list_physical_devices('GPU')
+    # if gpus:
+    #     try:
+    #         # Currently, memory growth needs to be the same across GPUs
+    #         for gpu in gpus:
+    #             tf.config.experimental.set_memory_growth(gpu, True)
+    #         logical_gpus = tf.config.list_logical_devices('GPU')
+    #         print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+    #     except RuntimeError as e:
+    #         # Memory growth must be set before GPUs have been initialized
+    #         print(e)
+
+    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+    print("CUDA Version: ", tf.sysconfig.get_build_info()["cuda_version"])
+    print("cuDNN Version: ", tf.sysconfig.get_build_info()["cudnn_version"])
+
+    for model in MODELS:
+        objective = create_objective(model)
+        study = optuna.create_study(
+            study_name=model, storage="sqlite:///schizo_model.db", direction="maximize",
+            pruner=optuna.pruners.MedianPruner(n_startup_trials=5)
+        )
+        study.optimize(objective, n_trials=50, gc_after_trial=True)
+        show_result(study)
 
 
 if __name__ == "__main__":

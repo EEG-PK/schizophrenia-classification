@@ -9,10 +9,12 @@ dependencies:
   - matplotlib
   - pandas
   - optuna
+  - optuna-dashboard
   - scikit-learn
   - mne
   - joblib
   - pillow
+  - opencv
   - nvidia/label/cuda-12.2.2::cuda-toolkit=12.2.2
   - conda-forge::cudnn=8.9
   - pip:

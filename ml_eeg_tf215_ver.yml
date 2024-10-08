@@ -9,10 +9,12 @@ dependencies:
   - matplotlib=3.9.2
   - pandas=2.2.2
   - optuna=4.0.0 # 3.6.1, 4.0.0
+  - optuna-dashboard=0.16.2
   - scikit-learn=1.5.1
   - mne=1.8.0 # 0.16.2, 1.8.0
   - joblib=1.4.2
   - pillow=10.4.0
+  - opencv=4.10.0
   - pip
   - pip:
     - tensorflow==2.15.0
