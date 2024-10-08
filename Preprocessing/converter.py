@@ -40,7 +40,7 @@ def get_signals_from_csv(filename: str, sample_frequency: int = 1024) -> Generat
 
 
 def get_signals_from_eea(filename: str, measurements_per_channel: int = 7680,
-                         channels: List | None = None, sample_frequency: int = 250) -> mne.io.RawArray:
+                         channels: List | None = None, sample_frequency: int = 128) -> mne.io.RawArray:
     """
     Reads eea file and split it into chunks and map it to channels.
 
