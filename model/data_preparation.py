@@ -1,13 +1,15 @@
-from typing import List, Dict, Any
+import random
+from typing import List, Dict, Any, Tuple
 import numpy as np
 import tensorflow as tf
 import joblib
 import cv2
+from tensorflow.keras.utils import to_categorical
 
 # TODO: Replace the mhd function
-from mhd_temp import margenau_hill_distribution as mhd
-from params import SEGMENT_SIZE_SEC, SAMPLING_RATE, SEGMENT_COLUMNS, SEGMENT_ROWS, DATASETS_DIR, \
-    DATASET_DIR, SCHIZO_DUMP_FILE, HEALTH_DUMP_FILE, COMMON_CHANNELS
+from model.mhd_temp import margenau_hill_distribution as mhd
+from model.params import SEGMENT_SIZE_SEC, SAMPLING_RATE, COMMON_CHANNELS, IMAGE_SIZE, \
+    DATA_SAMPLE_SHAPE, SEGMENTS_SPLIT, SEGMENT
 
 
 def load_eeg_data(filepath: str) -> List[Dict[str, Any]]:
@@ -21,26 +23,30 @@ def load_eeg_data(filepath: str) -> List[Dict[str, Any]]:
         return joblib.load(f)
 
 
-def load_and_segment_eeg_data(filepaths: List[str], segment_size: int = SEGMENT_SIZE_SEC,
-                              sampling_rate: int = SAMPLING_RATE, channel_list: [str] = COMMON_CHANNELS,
-                              label: int = 0) -> List[Dict[str, Any]]:
+def prepare_eeg_data(eeg_data: List[Dict[str, Any]], segment_size: int = SEGMENT_SIZE_SEC,
+                     sampling_rate: int = SAMPLING_RATE, channel_list: [str] = COMMON_CHANNELS,
+                     label: int = 0, segment: bool = False) -> List[Dict[str, Any]]:
     """
-    Loads EEG data from multiple files and segments each EEG recording.
-    :param filepaths: List of paths to the files containing EEG data.
-    :param segment_size: Size of each segment in seconds.
+    Prepares EEG data for further analysis by filtering and optionally segmenting the data.
+
+    :param eeg_data: List of dictionaries containing EEG data. Each dictionary should have a key 'eeg'
+                     with another dictionary mapping channel names to their respective signal values.
+    :param segment_size: Size of each segment in seconds, used if segmentation is required.
     :param sampling_rate: Sampling rate of the EEG data in Hz.
-    :param channel_list: Names of the EEG channels.
-    :param label: Label to assign to all segments from the given files.
-    :return: A list of dictionaries where each dictionary contains segmented EEG data and its corresponding label.
+    :param channel_list: List of channel names to filter the data by.
+    :param label: Label to assign to each sample, typically 0 for healthy and 1 for ill.
+    :param segment: Boolean flag indicating whether to segment the signal.
+    :returns: List of dictionaries with keys 'data' containing the processed EEG signals and 'label'
+              containing the corresponding labels.
     """
-    segmented_data = []
-    for filepath in filepaths:
-        eeg_data = load_eeg_data(filepath)
-        for sample in eeg_data:
-            channels = np.array([sample['eeg'][channel] for channel in channel_list if channel in sample['eeg']])
-            segments = segment_signal(channels, segment_size, sampling_rate)
-            segmented_data.append({'segments': segments, 'label': np.float32(label)})  # Add label from arg
-    return segmented_data
+    data = []
+    for sample in eeg_data:
+        filtered_channel_data = np.array(
+            [sample['eeg'][channel] for channel in channel_list if channel in sample['eeg']])
+        if segment:
+            filtered_channel_data = segment_signal(filtered_channel_data, segment_size, sampling_rate)
+        data.append({'data': filtered_channel_data, 'label': np.float32(label)})  # Add label from arg
+    return data
 
 
 def segment_signal(signal: np.ndarray, segment_size: int, sampling_rate: int) -> np.ndarray:
@@ -58,26 +64,45 @@ def segment_signal(signal: np.ndarray, segment_size: int, sampling_rate: int) ->
     return np.array(segments)
 
 
-def get_data():
-    print("Data loading and segmentation")
-    train_files_schizophrenia = [f"{DATASETS_DIR}/{DATASET_DIR}/{SCHIZO_DUMP_FILE}"]
-    train_files_health = [f"{DATASETS_DIR}/{DATASET_DIR}/{HEALTH_DUMP_FILE}"]
+def get_data(health_path, ill_path, segment=SEGMENT):
+    print("Data loading and preparation")
+    health_data = load_eeg_data(health_path)
+    ill_data = load_eeg_data(ill_path)
 
-    # Data segmentation
-    segmented_train_data_schizophrenia = load_and_segment_eeg_data(train_files_schizophrenia, label=1)
-    segmented_train_data_health = load_and_segment_eeg_data(train_files_health, label=0)
-    segmented_signals_data = segmented_train_data_schizophrenia + segmented_train_data_health
-    np.random.shuffle(segmented_signals_data)
+    # Data preparation
+    train_data_schizophrenia = prepare_eeg_data(ill_data, label=1, segment=segment)
+    train_data_health = prepare_eeg_data(health_data, label=0, segment=segment)
 
-    # Segments to M-H distribution
-    print("Segments to M-H distribution")
-    for signal in segmented_signals_data:
-        signal["segments"] = preprocess_eeg_sample(signal["segments"])
+    signals_data = train_data_schizophrenia + train_data_health
+    np.random.shuffle(signals_data)
 
-    return segmented_signals_data
+    # Signals to M-H distribution
+    print("Signals to M-H distribution")
+    for idx, signal in enumerate(signals_data):
+        print(f"Processing: {idx}/{len(signals_data)}")
+        if segment:
+            signal["data"] = preprocess_eeg_segmented_sample(signal["data"])
+        else:
+            signal["data"] = preprocess_eeg_sample(signal["data"])
+
+    return signals_data
 
 
-def preprocess_eeg_sample(sample: [np.ndarray]) -> np.ndarray:
+def preprocess_eeg_sample(sample: List[np.ndarray], size: Tuple[int, int] = IMAGE_SIZE,
+                          norm_range: Tuple[int, int] = (0, 1)) -> np.ndarray:
+    """
+    Converts each channel in an EEG sample to an image representation (M-H distribution).
+
+    :param sample: List of numpy arrays representing EEG channels.
+    :param size: Tuple representing the sizes to which each channel's image representation is resized.
+    :param norm_range: Tuple indicating the normalization range for the signal channel (image representation). Default is (0, 1).
+    :return: A numpy array with the M-H distribution images stacked along the depth dimension.
+    """
+    return np.stack([signal_to_mhd_image(channel, size=size, range=norm_range) for channel in sample], axis=-1)
+
+
+def preprocess_eeg_segmented_sample(sample: [np.ndarray], size: Tuple[int, int] = IMAGE_SIZE,
+                                    norm_range: Tuple[int, int] = (0, 1)) -> np.ndarray:
     """
     Processes EEG sample by converting each segment into an image representation (M-H distribution).
 
@@ -89,6 +114,8 @@ def preprocess_eeg_sample(sample: [np.ndarray]) -> np.ndarray:
             - n_segments: The number of segments in the sample.
             - n_channels: The number of EEG channels.
             - segment_length: The length of each segment.
+    :param size: Tuple representing the sizes to which each channel's image representation is resized.
+    :param norm_range: Tuple indicating the normalization range for the signal channel (image representation). Default is (0, 1).
     :return: A numpy array of shape (n_segments, segment_height, segment_width, n_channels),
           representing the processed segments as 'images'.
 
@@ -102,7 +129,7 @@ def preprocess_eeg_sample(sample: [np.ndarray]) -> np.ndarray:
     """
     processed_segments = []
     for segment in sample:
-        segment_image = np.stack([signal_to_mhd_image(channel, range=(0, 1)) for channel in segment], axis=-1)
+        segment_image = preprocess_eeg_sample(segment, size, norm_range)
         processed_segments.append(segment_image)
     return np.array(processed_segments)
 
@@ -149,7 +176,8 @@ def scale_minmax(X: np.ndarray, min: float = 0.0, max: float = 1.0) -> np.ndarra
 
 
 def create_eeg_dataset(data: List[Dict[str, np.ndarray]], batch_size: int, shuffle: bool = False,
-                       repeat: bool = True) -> tf.data.Dataset:
+                       repeat: bool = True, segment_split: bool = SEGMENTS_SPLIT,
+                       data_shape=DATA_SAMPLE_SHAPE) -> tf.data.Dataset:
     """
     Creates a TensorFlow dataset from EEG data,
     where data contains already segmented signals and preprocessed into M-H distributions.
@@ -159,33 +187,44 @@ def create_eeg_dataset(data: List[Dict[str, np.ndarray]], batch_size: int, shuff
     it for multiple epochs.
 
     :param data: A list of dictionaries, each containing:
-        - 'segments': A numpy array of shape (n_segments, segment_height, segment_width, n_channels).
+        - 'segments': A numpy array of shape (n_segments, segment_height, segment_width, n_channels) or (segment_height, segment_width, n_channels).
         - 'label': An integer label associated with the data.
     :param batch_size: The number of samples per batch.
     :param shuffle: Whether to shuffle the data before batching. Default is False.
     :param repeat: Whether to repeat the dataset for multiple epochs. Default is True.
+    :param segment_split: Whether to split the data into individual segments.
+    :param data_shape: The shape of the data samples.
     :return: A `tf.data.Dataset` object that yields batches of data.
 
     The dataset's output signature:
-        - The features have a shape of (None, N/2, N, CHANNEL_NUMBER), where N is len of the signal.
-        - The labels are floats.
+        - The features have a shape of (None, segment_height, segment_width, n_channels) or (segment_height, segment_width, n_channels).
+        - The labels are one-hot encoded with a shape of (2,).
 
     Note:
-        If `shuffle` is True, the dataset will be shuffled with a buffer size of 10.
+        If `shuffle` is True, the dataset will be shuffled with a buffer size of 100.
     """
+    all_segments = []
+    for sample in data:
+        if segment_split:
+            for segment in sample["segments"]:
+                all_segments.append((segment, sample["label"]))
+        else:
+            all_segments.append((sample["segments"], sample["label"]))
+    if shuffle:
+        random.shuffle(all_segments)
 
     def generator():
-        for sample in data:
-            yield sample["segments"], np.expand_dims(sample["label"], axis=-1)
+        for segment, label in all_segments:
+            yield segment, to_categorical(label, num_classes=2)
 
     output_signature = (
-        tf.TensorSpec(shape=(None, SEGMENT_ROWS, SEGMENT_COLUMNS, len(COMMON_CHANNELS)), dtype=tf.float32),
-        tf.TensorSpec(shape=(1,), dtype=tf.float32)
+        tf.TensorSpec(shape=data_shape, dtype=tf.float32),
+        tf.TensorSpec(shape=(2,), dtype=tf.float32)
     )
 
     dataset = tf.data.Dataset.from_generator(generator, output_signature=output_signature)
     if shuffle:
-        dataset = dataset.shuffle(10)
+        dataset = dataset.shuffle(100)
     dataset = dataset.batch(batch_size)
     if repeat:
         dataset = dataset.repeat()

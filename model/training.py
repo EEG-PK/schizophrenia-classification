@@ -11,16 +11,17 @@ from tensorflow.keras import layers
 from joblib import dump, load
 from sklearn.metrics import cohen_kappa_score
 
-from data_preparation import create_eeg_dataset
-from data_preparation import get_data
-from params import EPOCHS, SEGMENT_COLUMNS, SEGMENT_ROWS, KFOLD_N_SPLITS, THRESHOLD, COMMON_CHANNELS, TRAIN_DATA_FILE, \
-    MODELS
+from model.data_preparation import create_eeg_dataset, get_data
+from model.params import EPOCHS, SEGMENT_COLUMNS, SEGMENT_ROWS, KFOLD_N_SPLITS, THRESHOLD, COMMON_CHANNELS, \
+    TRAIN_DATA_PATH, MODELS, DATASETS_DIR, DATASET_DIR, SCHIZO_DUMP_FILE, HEALTH_DUMP_FILE, SEGMENT, SEGMENTS_SPLIT
 
 input_shape = (SEGMENT_ROWS, SEGMENT_COLUMNS, len(COMMON_CHANNELS))
+train_files_health = f"{DATASETS_DIR}/{DATASET_DIR}/{HEALTH_DUMP_FILE}"
+train_files_schizophrenia = f"{DATASETS_DIR}/{DATASET_DIR}/{SCHIZO_DUMP_FILE}"
 
-data_path = TRAIN_DATA_FILE
+data_path = TRAIN_DATA_PATH
 if not os.path.exists(data_path):
-    data = get_data()
+    data = get_data(train_files_health, train_files_schizophrenia)
     dump(data, data_path)
     print(f"Data was saved to file {data_path}")
 else:
@@ -46,12 +47,12 @@ print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
 
 def check_cnn2d_dim(height: int,
-                     width: int,
-                     n_conv_layers: int,
-                     padding: str,
-                     filter_size: int,
-                     strides_conv: int,
-                     pool_size: int) -> int:
+                    width: int,
+                    n_conv_layers: int,
+                    padding: str,
+                    filter_size: int,
+                    strides_conv: int,
+                    pool_size: int) -> int:
     """Check the dimensions of a 2D CNN after a specified number of convolutional layers.
 
     This function calculates the height and width of the feature map
@@ -90,13 +91,13 @@ def check_cnn2d_dim(height: int,
 
 
 def check_cnn3d_dim(depth: int,
-                     height: int,
-                     width: int,
-                     n_conv_layers: int,
-                     padding: str,
-                     filter_size: int,
-                     strides_conv: int,
-                     pool_size: int) -> int:
+                    height: int,
+                    width: int,
+                    n_conv_layers: int,
+                    padding: str,
+                    filter_size: int,
+                    strides_conv: int,
+                    pool_size: int) -> int:
     """Check the dimensions of a 3D CNN after a specified number of convolutional layers.
 
     This function calculates the depth, height, and width of the feature map
@@ -170,7 +171,6 @@ def k_fold_training(trial: optuna.Trial,
 
     :param trial: An Optuna trial object for hyperparameter optimization.
     :param model_type: The type of model to be created and trained.
-                       Must be one of the following: 'cnn_lstm', 'cnn3d'.
     :param batch_size: The number of samples per gradient update.
     :param learning_rate: The learning rate for the optimizer.
 
@@ -190,19 +190,22 @@ def k_fold_training(trial: optuna.Trial,
     for fold, (train_index, val_index) in enumerate(skf.split(data, labels)):
         train_data = [data[i] for i in train_index]
         val_data = [data[i] for i in val_index]
-
-        steps_per_epoch_train = len(train_data) // batch_size
-        steps_per_epoch_val = len(val_data) // batch_size
-        train_ds = create_eeg_dataset(train_data, batch_size=batch_size)
+        if SEGMENTS_SPLIT:
+            steps_per_epoch_train = len(train_data) * 20 // batch_size
+            steps_per_epoch_val = len(val_data) * 20 // batch_size
+        else:
+            steps_per_epoch_train = len(train_data) // batch_size
+            steps_per_epoch_val = len(val_data) // batch_size
+        train_ds = create_eeg_dataset(train_data, batch_size=batch_size, shuffle=True)
         val_ds = create_eeg_dataset(val_data, batch_size=batch_size)
 
         # DEBUG
-        # for element in val_ds.take(2):
+        # for element in val_ds.take(10):
         #     frames, label = element
         #     print("Frames shape:", frames.shape)
         #     print("Label:", label.numpy())
         #     print("Label shape:", label.shape)
-        # for element in train_ds.take(2):
+        # for element in train_ds.take(10):
         #     frames, label = element
         #     print("Frames shape:", frames.shape)
         #     print("Label:", label.numpy())
@@ -230,7 +233,8 @@ def k_fold_training(trial: optuna.Trial,
             validation_data=val_ds,
             validation_steps=steps_per_epoch_val,
             verbose=2,
-            callbacks=[tensorboard_callback, early_stopping_callback]  # command to run tensorBoard: tensorboard --logdir=logs/fit
+            callbacks=[tensorboard_callback, early_stopping_callback]
+            # command to run tensorBoard: tensorboard --logdir=logs/fit
         )
 
         # y_val_pred = model.predict(val_ds, steps=steps_per_epoch_val)
@@ -262,8 +266,7 @@ def create_model(trial: optuna.Trial, model_type: str, debug: bool = False) -> t
     it initializes the appropriate model from the `MODELS` dictionary.
 
     :param trial: An Optuna trial object for hyperparameter optimization.
-    :param model_type: The type of model to be created. Must be one of:
-                       'cnn_lstm' or 'cnn3d'.
+    :param model_type: The type of model to be created.
     :param debug: Flag indicating whether to enable debug mode (default is False).
 
     :return: A Keras model instance configured with the suggested hyperparameters.
@@ -276,46 +279,74 @@ def create_model(trial: optuna.Trial, model_type: str, debug: bool = False) -> t
         - This function assumes the existence of global variables:
           `input_shape` and `MODELS`.
     """
-    n_conv_layers = trial.suggest_int('n_conv_layers', 1, 9)
-    filters = trial.suggest_int('filters', 8, 80, step=8)
     # filter_size = trial.suggest_int('filter_size', 2, 5)
     # strides_conv = trial.suggest_int('strides_conv', 1, 2)
-    filter_size = 3
-    strides_conv = 1
-    pool_size = 2
-    strides_pool = 2
-    padding = 'same'
-    dropout_rate = trial.suggest_float('dropout_rate', 0.1, 0.5)
-    l2_reg = trial.suggest_float('l2_reg', 1e-5, 1e-2, log=True)
 
     model_params: Dict[str, Any] = {
         'input_shape': input_shape,
-        'n_conv_layers': n_conv_layers,
-        'filters': filters,
-        'filter_size': filter_size,
-        'strides_conv': strides_conv,
-        'pool_size': pool_size,
-        'strides_pool': strides_pool,
-        'dropout_rate': dropout_rate,
-        'l2_reg': l2_reg,
-        'padding': padding,
         'debug': debug
     }
 
     if model_type == 'cnn_lstm':
-        model_params['lstm_units'] = trial.suggest_int('lstm_units', 6, 192, step=6)
+        filter_size = 3
+        strides_conv = 1
+        pool_size = 2
+        strides_pool = 2
+        padding = 'same'
+        n_conv_layers = trial.suggest_int('n_conv_layers', 1, 9)
+        model_params: Dict[str, Any] = {
+            'input_shape': input_shape,
+            'n_conv_layers': n_conv_layers,
+            'filters': trial.suggest_int('filters', 8, 80, step=8),
+            'filter_size': filter_size,
+            'strides_conv': strides_conv,
+            'pool_size': pool_size,
+            'strides_pool': strides_pool,
+            'dropout_rate': trial.suggest_float('dropout_rate', 0.1, 0.5),
+            'l2_reg': trial.suggest_float('l2_reg', 1e-5, 1e-2, log=True),
+            'padding': padding,
+            'debug': debug,
+            'lstm_units': trial.suggest_int('lstm_units', 6, 192, step=6)
+        }
 
         # Check dimensions for 2D CNN model
         bad_conv_layer_number = check_cnn2d_dim(input_shape[0], input_shape[1], n_conv_layers, padding, filter_size,
                                                 strides_conv, pool_size)
         if bad_conv_layer_number != -1:
             raise optuna.exceptions.TrialPruned(f"Invalid dimensions after layer {bad_conv_layer_number + 1}.")
+
     elif model_type == 'cnn3d':
+        filter_size = 3
+        strides_conv = 1
+        pool_size = 2
+        strides_pool = 2
+        padding = 'same'
+        n_conv_layers = trial.suggest_int('n_conv_layers', 1, 9)
+        model_params: Dict[str, Any] = {
+            'input_shape': input_shape,
+            'n_conv_layers': n_conv_layers,
+            'filters': trial.suggest_int('filters', 8, 80, step=8),
+            'filter_size': filter_size,
+            'strides_conv': strides_conv,
+            'pool_size': pool_size,
+            'strides_pool': strides_pool,
+            'dropout_rate': trial.suggest_float('dropout_rate', 0.1, 0.5),
+            'l2_reg': trial.suggest_float('l2_reg', 1e-5, 1e-2, log=True),
+            'padding': padding,
+            'debug': debug
+        }
         # Check dimensions for 3D CNN model
         bad_conv_layer_number = check_cnn3d_dim(input_shape[2], input_shape[0], input_shape[1], n_conv_layers, padding,
                                                 filter_size, strides_conv, pool_size)
         if bad_conv_layer_number != -1:
             raise optuna.exceptions.TrialPruned(f"Invalid dimensions after layer {bad_conv_layer_number + 1}.")
+
+    elif model_type == 'cnn_lstm_prepared':
+        model_params['lstm_units'] = trial.suggest_int('lstm_units', 6, 192, step=6)
+        model_params['merge_layer'] = trial.suggest_categorical('merge_layer', ['avg_pool', 'max_pool', 'flatten'])
+        model_params['merge_layer_lstm'] = trial.suggest_categorical('merge_layer', ['pool2d', 'flatten'])
+    elif model_type == 'cnn_prepared':
+        model_params['merge_layer'] = trial.suggest_categorical('merge_layer', ['avg_pool','max_pool', 'flatten'])
 
     try:
         return MODELS[model_type](**model_params)
@@ -344,9 +375,11 @@ def create_objective(model_type: str) -> Callable[[optuna.Trial], float]:
         - The function assumes that the `k_fold_training` function is
           available and correctly configured to handle the specified model type.
     """
+
     def objective(trial):
         learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
-        batch_size = trial.suggest_categorical('batch_size', [3])
+        batch_size = trial.suggest_categorical('batch_size', [3, 6, 10, 15, 30, 60])
+        # model_type = trial.suggest_categorical('model_type', ['cnn_lstm', 'cnn3d', 'cnn_lstm_prepared', 'cnn_prepared'])
         return k_fold_training(trial, model_type, batch_size, learning_rate)
 
     return objective
