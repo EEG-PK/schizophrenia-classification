@@ -9,8 +9,10 @@ from tftb.processing import MargenauHillDistribution
 import numpy as np
 from joblib import dump
 import os
+import pathlib
 
-from model.params import COMMON_CHANNELS
+from Preprocessing.params import REF_ELECTRODE
+from model.params import COMMON_CHANNELS, SAMPLING_RATE
 
 
 def get_signals_from_csv(filename: str, sample_frequency: int = 1024) -> Generator[mne.io.RawArray, None, None]:
@@ -121,8 +123,7 @@ def save_to_pickle_file(object_to_dump: Any, filename: str, folder_name: str) ->
     :param filename: Filename of file
     :param folder_name: Folder in which data should be saved. If folder doesn't exist it will be created.
     """
-    if not os.path.exists(folder_name):
-        os.mkdir(folder_name)
+    pathlib.Path(folder_name).mkdir(parents=True, exist_ok=True)
     dump(object_to_dump, f"{folder_name}/{filename}")
 
 
@@ -340,22 +341,27 @@ def process_folder(input_folder: str, mode: Literal['Edf', 'Csv', 'Eea', 'All'],
     if output_folder is not None:
         save_to_pickle_file(object_dump, f'eeg_{mode}_{patient_state}.pk', output_folder)
     else:
-        save_to_pickle_file(object_dump, f'eeg_{mode}_{patient_state}.pk', f'{mode}Data')
+        save_to_pickle_file(object_dump, f'eeg_{mode}_{patient_state}.pk', f'Data/{mode}Data')
 
 
-def preprocess_data_all_steps(signals: mne.io.RawArray | RawEDF, file_name: str) -> Dict[
+def preprocess_data_all_steps(signals: mne.io.RawArray | RawEDF, file_name: str, ref_electrode: bool = REF_ELECTRODE) -> Dict[
     str, np.ndarray]:
     """
     Main pipeline for preprocessing
 
     :param file_name: Name of file which is processed
     :param signals: Signals from files in RawArray or RawEDF
+    :param ref_electrode: Create reference electrode or not
     """
-    data = create_reference_electrode(signals)
+    if ref_electrode:
+        data = create_reference_electrode(signals)
+    else:
+        data = signals
     # drops all channels which are not common across all datasets
     data = drop_channels(data)
     data = filter_mne(data)
-    data = resample_signal(data, original_sample_rate=signals.info['sfreq'])
+    if SAMPLING_RATE != signals.info['sfreq']:
+        data = resample_signal(data, original_sample_rate=signals.info['sfreq'])
     data = scale_values(data)
     return cast_from_mne_to_dict(data, file_name)
 
