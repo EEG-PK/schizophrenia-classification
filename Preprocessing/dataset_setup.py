@@ -113,6 +113,8 @@ def process_csv_files():
             shutil.move(f"{folder_to_save_datasets}/CsvData/{file_name.split('_')[1]}",
                         f"{folder_to_save_datasets}/CsvIll/{file_name.split('_')[1]}")
 
+    shutil.move(f"{folder_to_save_datasets}/CsvData/columnLabels.csv",
+                f"{folder_to_save_datasets}/csv_column_labels.csv")
     shutil.rmtree(f"{folder_to_save_datasets}/CsvData")
 
 
@@ -138,7 +140,7 @@ def extract_files():
 
 
 if __name__ == '__main__':
-    download_datasets()
-    extract_files()
+    # download_datasets()
+    # extract_files()
     # process_edf_files()
-    # process_csv_files()
+    process_csv_files()

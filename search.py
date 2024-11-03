@@ -2,8 +2,11 @@ import optuna
 from optuna.trial import TrialState
 import tensorflow as tf
 
-from model.params import MODELS, STORAGE_NAME
+from model.params import MODELS, STORAGE_NAME, DATASET_DIR
 from model.training import create_objective
+import os
+
+os.environ['TF_GPU_ALLOCATOR'] = 'cuda_malloc_async'
 
 
 def show_result(study: optuna.Study) -> None:
@@ -36,17 +39,20 @@ def main():
     # tf.data.experimental.enable_debug_mode()
 
     # TRY IF GPU MEMORY IS RUNNING OUT
-    # gpus = tf.config.list_physical_devices('GPU')
-    # if gpus:
-    #     try:
-    #         # Currently, memory growth needs to be the same across GPUs
-    #         for gpu in gpus:
-    #             tf.config.experimental.set_memory_growth(gpu, True)
-    #         logical_gpus = tf.config.list_logical_devices('GPU')
-    #         print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
-    #     except RuntimeError as e:
-    #         # Memory growth must be set before GPUs have been initialized
-    #         print(e)
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        try:
+            # Currently, memory growth needs to be the same across GPUs
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+            logical_gpus = tf.config.list_logical_devices('GPU')
+            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+        except RuntimeError as e:
+            # Memory growth must be set before GPUs have been initialized
+            print(e)
+
+    # tf.debugging.set_log_device_placement(True)
+    # tf.config.set_visible_devices(physical_devices[0], 'GPU')
 
     print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
     print("CUDA Version: ", tf.sysconfig.get_build_info()["cuda_version"])
@@ -54,12 +60,12 @@ def main():
 
     for model in MODELS:
         objective = create_objective(model)
+
         study = optuna.create_study(
-            study_name=model, storage=f"sqlite:///{STORAGE_NAME}", direction="maximize",
-            pruner=optuna.pruners.MedianPruner(n_startup_trials=5)
+            study_name=f'{model}_{DATASET_DIR}', storage=f"sqlite:///{STORAGE_NAME}", direction="maximize",
+            pruner=optuna.pruners.MedianPruner(n_startup_trials=1), load_if_exists=True
         )
-        study.optimize(objective, n_trials=50, gc_after_trial=True)
-        show_result(study)
+        study.optimize(objective, n_trials=1)
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+import random
 from datetime import datetime
 import os
 from typing import Callable, Dict, Any
@@ -9,13 +10,12 @@ from sklearn.model_selection import StratifiedKFold
 import tensorflow as tf
 from tensorflow.keras import layers
 from joblib import dump, load
-from sklearn.metrics import cohen_kappa_score
 
 from model.data_preparation import create_eeg_dataset, get_data
-from model.params import EPOCHS, SEGMENT_COLUMNS, SEGMENT_ROWS, KFOLD_N_SPLITS, THRESHOLD, COMMON_CHANNELS, \
-    TRAIN_DATA_PATH, MODELS, DATASETS_DIR, DATASET_DIR, SCHIZO_DUMP_FILE, HEALTH_DUMP_FILE, SEGMENT, SEGMENTS_SPLIT
+from model.params import EPOCHS, KFOLD_N_SPLITS, THRESHOLD, \
+    TRAIN_DATA_PATH, MODELS, DATASETS_DIR, DATASET_DIR, SCHIZO_DUMP_FILE, HEALTH_DUMP_FILE, SEGMENTS_SPLIT, \
+    DATASETS_MELT, STORAGE_NAME, DATA_SAMPLE_SHAPE
 
-input_shape = (SEGMENT_ROWS, SEGMENT_COLUMNS, len(COMMON_CHANNELS))
 train_files_health = f"{DATASETS_DIR}/{DATASET_DIR}/{HEALTH_DUMP_FILE}"
 train_files_schizophrenia = f"{DATASETS_DIR}/{DATASET_DIR}/{SCHIZO_DUMP_FILE}"
 
@@ -28,19 +28,7 @@ else:
     print(f"File {data_path} already exists and will be loaded.")
     with open(data_path, 'rb') as f:
         data = load(f)
-
-labels = np.array([sample['label'] for sample in data])
 print(f"Data loaded. Number of samples: {len(data)}")
-
-log_dir = "logs/fit/" + datetime.now().strftime("%Y%m%d-%H%M%S")
-tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
-
-early_stopping_callback = EarlyStopping(
-    monitor='val_loss',  # alternatively other metrics e.g. ‘accuracy’, ‘val_f1_score’
-    patience=5,
-    restore_best_weights=True,
-    start_from_epoch=5
-)
 
 strategy = tf.distribute.MirroredStrategy()
 print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
@@ -138,29 +126,21 @@ def check_cnn3d_dim(depth: int,
     return -1
 
 
-# DEBUG
-# Callback to print layer outputs
-# class PrintLayerOutput(callbacks.Callback):
-#     def __init__(self, validation_data):
-#         super().__init__()
-#         self.validation_data = validation_data
-#
-#     def on_epoch_end(self, epoch, logs=None):
-#         # Access the first batch of validation data
-#         val_batch = next(iter(self.validation_data))
-#         val_batch_data, _ = val_batch
-#
-#         for layer in self.model.layers:
-#             if 'input' not in layer.name:
-#                 intermediate_layer_model = models.Model(inputs=self.model.input, outputs=layer.output)
-#                 intermediate_output = intermediate_layer_model.predict(val_batch_data)
-#                 print(f"Layer: {layer.name}, Output shape: {intermediate_output.shape}")
+def flat_samples(data_samples, shuffle=True):
+    all_segments = []
+    for sample in data_samples:
+        if SEGMENTS_SPLIT:
+            for segment in sample["segments"]:
+                all_segments.append((segment, sample["label"]))
+        else:
+            all_segments.append((sample["segments"], sample["label"]))
+    if shuffle:
+        random.shuffle(all_segments)
+    return all_segments
 
 
 def k_fold_training(trial: optuna.Trial,
-                    model_type: str,
-                    batch_size: int,
-                    learning_rate: float) -> float:
+                    model_type: str) -> float:
     """Perform k-fold cross-validation training on a specified model.
 
     This function utilizes stratified k-fold cross-validation to train
@@ -171,8 +151,6 @@ def k_fold_training(trial: optuna.Trial,
 
     :param trial: An Optuna trial object for hyperparameter optimization.
     :param model_type: The type of model to be created and trained.
-    :param batch_size: The number of samples per gradient update.
-    :param learning_rate: The learning rate for the optimizer.
 
     :return: The average validation accuracy across all k-folds.
 
@@ -185,19 +163,42 @@ def k_fold_training(trial: optuna.Trial,
           `tensorboard_callback`, `early_stopping_callback`, and `strategy`.
         - TensorFlow/Keras is used for model training and evaluation.
     """
+    session_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+    # learning_rate = trial.suggest_float('learning_rate', 1e-6, 1e-3, log=True)
+    learning_rate = 4.267e-05
+    # batch_size = trial.suggest_categorical('batch_size', [12, 36, 60])
+    batch_size = 36
+
+    # model_params = get_hyperparams(trial, model_type, debug=True)
+    # hyperparams_str = '__'.join([f"{key}_{value}" for key, value in trial.params.items()])
+
+    early_stopping_callback = EarlyStopping(
+        monitor='val_loss',
+        patience=15,
+        restore_best_weights=True,
+        start_from_epoch=5
+    )
+
+    if DATASETS_MELT:
+        all_data = flat_samples(data)
+        labels = np.array([label for sample, label in all_data])
+    else:
+        all_data = data
+        labels = np.array([sample['label'] for sample in all_data])
+
     accuracies = []
     skf = StratifiedKFold(n_splits=KFOLD_N_SPLITS)
-    for fold, (train_index, val_index) in enumerate(skf.split(data, labels)):
-        train_data = [data[i] for i in train_index]
-        val_data = [data[i] for i in val_index]
-        if SEGMENTS_SPLIT:
-            steps_per_epoch_train = len(train_data) * 20 // batch_size
-            steps_per_epoch_val = len(val_data) * 20 // batch_size
-        else:
-            steps_per_epoch_train = len(train_data) // batch_size
-            steps_per_epoch_val = len(val_data) // batch_size
-        train_ds = create_eeg_dataset(train_data, batch_size=batch_size, shuffle=True)
-        val_ds = create_eeg_dataset(val_data, batch_size=batch_size)
+    for fold, (train_index, val_index) in enumerate(skf.split(all_data, labels)):
+        print(f"Fold {fold + 1}")
+        train_data = [all_data[i] for i in train_index]
+        val_data = [all_data[i] for i in val_index]
+        if not DATASETS_MELT:
+            train_data = flat_samples(train_data)
+            val_data = flat_samples(val_data)
+
+        train_ds = create_eeg_dataset(train_data, batch_size=batch_size, shuffle=True, generator=True, repeat=False)
+        val_ds = create_eeg_dataset(val_data, batch_size=batch_size, generator=True, repeat=False)
 
         # DEBUG
         # for element in val_ds.take(10):
@@ -211,39 +212,43 @@ def k_fold_training(trial: optuna.Trial,
         #     print("Label:", label.numpy())
         #     print("Label shape:", label.shape)
 
-        # TODO: Turn on strategy and Disable debug mode (args: debug, run_eagerly)
-        with strategy.scope():
-            model = create_model(trial, model_type, debug=True)
-            model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
-                          loss='binary_crossentropy', metrics=[
-                    'accuracy',
-                    tf.keras.metrics.Recall(),
-                    tf.keras.metrics.SpecificityAtSensitivity(sensitivity=THRESHOLD),
-                    tf.keras.metrics.F1Score(threshold=THRESHOLD, average='micro')
-                ], run_eagerly=False)
-        model.summary()
+        # log_dir = os.path.join(
+        #     "logs", "fit", STORAGE_NAME, model_type,
+        #     hyperparams_str, session_timestamp, f"fold_{fold + 1}"
+        # )
+        log_dir = os.path.join(
+            "logs", "fit", STORAGE_NAME, model_type, session_timestamp, f"fold_{fold + 1}"
+        )
 
-        # DEBUG
-        # print_layer_output = PrintLayerOutput(val_ds)
+        tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+
+        with strategy.scope():
+            metrics = [
+                'accuracy',
+                tf.keras.metrics.Recall(),
+                tf.keras.metrics.SpecificityAtSensitivity(sensitivity=THRESHOLD),
+                tf.keras.metrics.F1Score(threshold=THRESHOLD, average='micro')
+            ]
+
+            try:
+                model = MODELS[model_type](trial=trial, input_shape=DATA_SAMPLE_SHAPE, learning_rate=learning_rate,
+                                           metrics=metrics, debug=False)
+            except KeyError as e:
+                print(f"Unexpected error: {trial.number}: {str(e)}")
+                raise ValueError(f"Unknown model_type: {model_type}")
+            except ValueError as e:
+                print(f"Error during creating the model: {trial.number}: {str(e)}")
+                raise optuna.exceptions.TrialPruned(f"Probably invalid dimensions.")
+
+        model.summary()
 
         history = model.fit(
             train_ds,
             epochs=EPOCHS,
-            steps_per_epoch=steps_per_epoch_train,
             validation_data=val_ds,
-            validation_steps=steps_per_epoch_val,
             verbose=2,
             callbacks=[tensorboard_callback, early_stopping_callback]
-            # command to run tensorBoard: tensorboard --logdir=logs/fit
         )
-
-        # y_val_pred = model.predict(val_ds, steps=steps_per_epoch_val)
-        # y_val_pred = (np.array(y_val_pred) >= THRESHOLD).astype(int).flatten()
-        # y_val_true = np.array([sample["label"] for sample in val_data]).astype(int)
-        # kappa = cohen_kappa_score(y_val_true, y_val_pred)
-        # TODO: Check if kappa score is correct
-        # kappa_v2 = cohen_kappa_score([0,1,1,1], [0,1,1,0])
-        # print(f"Cohen's Kappa: {kappa}")
 
         val_accuracy = np.mean(history.history['val_accuracy'])
         trial.report(val_accuracy, step=fold)
@@ -257,7 +262,7 @@ def k_fold_training(trial: optuna.Trial,
 
 
 # TODO: Create from it builder/class or something..
-def create_model(trial: optuna.Trial, model_type: str, debug: bool = False) -> tf.keras.Model:
+def get_hyperparams(trial: optuna.Trial, model_type: str, debug: bool = False, input_shape=DATA_SAMPLE_SHAPE) -> Dict[str, Any]:
     """Create a Keras model based on the specified model type and hyperparameters.
 
     This function uses Optuna to suggest hyperparameters for the model.
@@ -279,8 +284,6 @@ def create_model(trial: optuna.Trial, model_type: str, debug: bool = False) -> t
         - This function assumes the existence of global variables:
           `input_shape` and `MODELS`.
     """
-    # filter_size = trial.suggest_int('filter_size', 2, 5)
-    # strides_conv = trial.suggest_int('strides_conv', 1, 2)
 
     model_params: Dict[str, Any] = {
         'input_shape': input_shape,
@@ -345,13 +348,27 @@ def create_model(trial: optuna.Trial, model_type: str, debug: bool = False) -> t
         model_params['lstm_units'] = trial.suggest_int('lstm_units', 6, 192, step=6)
         model_params['merge_layer'] = trial.suggest_categorical('merge_layer', ['avg_pool', 'max_pool', 'flatten'])
         model_params['merge_layer_lstm'] = trial.suggest_categorical('merge_layer', ['pool2d', 'flatten'])
-    elif model_type == 'cnn_prepared':
-        model_params['merge_layer'] = trial.suggest_categorical('merge_layer', ['avg_pool','max_pool', 'flatten'])
 
-    try:
-        return MODELS[model_type](**model_params)
-    except KeyError:
-        raise ValueError(f"Unknown model_type: {model_type}")
+    elif model_type == 'cnn_prepared':
+        model_params['merge_layer'] = trial.suggest_categorical('merge_layer', ['avg_pool', 'flatten'])
+        model_params['padding'] = trial.suggest_categorical('padding', ['valid', 'same'])
+        model_params['filters'] = []
+        for i in range(5):
+            model_params['filters'].append(trial.suggest_int('filter_number_{}'.format(i), 32, 416, step=64))
+        model_params['kernel_sizes'] = []
+        for i in range(5):
+            model_params['kernel_sizes'].append(trial.suggest_int('kernel_sizes_{}'.format(i), 3, 9, step=1))
+        model_params['pool_sizes'] = []
+        for i in range(3):
+            model_params['pool_sizes'].append(trial.suggest_int('pool_sizes_{}'.format(i), 2, 4, step=1))
+        model_params['dense_units'] = []
+        for i in range(3):
+            model_params['dense_units'].append(trial.suggest_int('dense_units_{}'.format(i), 192, 4096, step=50))
+
+    elif model_type == 'efficientnet':
+        model_params['dropout_rate'] = trial.suggest_categorical('dropout_rate', [0.1, 0.3, 0.5])
+
+    return model_params
 
 
 def create_objective(model_type: str) -> Callable[[optuna.Trial], float]:
@@ -363,8 +380,7 @@ def create_objective(model_type: str) -> Callable[[optuna.Trial], float]:
     and batch size, then evaluates the model's performance using k-fold
     cross-validation.
 
-    :param model_type: The type of model to be optimized. Must be one of:
-                       'cnn_lstm' or 'cnn3d'.
+    :param model_type: The type of model to be optimized.
 
     :return: A callable objective function that takes an Optuna trial
              as input and returns the evaluation score (validation accuracy).
@@ -377,9 +393,24 @@ def create_objective(model_type: str) -> Callable[[optuna.Trial], float]:
     """
 
     def objective(trial):
-        learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2, log=True)
-        batch_size = trial.suggest_categorical('batch_size', [3, 6, 10, 15, 30, 60])
+        # learning_rate = trial.suggest_float('learning_rate', 1e-6, 1e-3, log=True)
+        # learning_rate = trial.suggest_categorical('learning_rate', [3.6131821360463974e-05])
+        # batch_size = trial.suggest_categorical('batch_size', [10, 20, 30, 40])
         # model_type = trial.suggest_categorical('model_type', ['cnn_lstm', 'cnn3d', 'cnn_lstm_prepared', 'cnn_prepared'])
-        return k_fold_training(trial, model_type, batch_size, learning_rate)
+        # model =  MODELS[model_type](trial=trial, input_shape=DATA_SAMPLE_SHAPE, learning_rate=learning_rate, debug=True)
+        return k_fold_training(trial, model_type)
 
     return objective
+
+
+def unfreeze_model(model, learning_rate):
+    # We unfreeze the top 20 layers while leaving BatchNorm layers frozen
+    for layer in model.layers[-20:]:
+        if not isinstance(layer, layers.BatchNormalization):
+            layer.trainable = True
+
+    with strategy.scope():
+        optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+        model.compile(
+            optimizer=optimizer, loss="categorical_crossentropy", metrics=["accuracy"]
+        )

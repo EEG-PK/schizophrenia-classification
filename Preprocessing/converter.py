@@ -24,7 +24,7 @@ def get_signals_from_csv(filename: str, sample_frequency: int = 1024) -> Generat
     :param filename: Path to file. If file is in the project folder name is sufficient.
     :return: RawArray from mne with signals
     """
-    csv_labels = list(pd.read_csv("columnLabels.csv").columns)
+    csv_labels = list(pd.read_csv("Preprocessing/Datasets/csv_column_labels.csv").columns)
     df: pd.DataFrame
     for df in pd.read_csv(filename, names=csv_labels, chunksize=3072):
         # if condition is other than 2 (passive listing to tone) skip the data

@@ -4,12 +4,13 @@ import numpy as np
 import tensorflow as tf
 import joblib
 import cv2
+from numpy import ndarray
 from tensorflow.keras.utils import to_categorical
 
 # TODO: Replace the mhd function
 from model.mhd_temp import margenau_hill_distribution as mhd
 from model.params import SEGMENT_SIZE_SEC, SAMPLING_RATE, COMMON_CHANNELS, IMAGE_SIZE, \
-    DATA_SAMPLE_SHAPE, SEGMENTS_SPLIT, SEGMENT
+    DATA_SAMPLE_SHAPE, SEGMENTS_SPLIT, SEGMENT, CHANNEL_GROUPS, AVERAGE_CHANNELS_3, NCHW_INPUT_FORMAT
 
 
 def load_eeg_data(filepath: str) -> List[Dict[str, Any]]:
@@ -41,12 +42,39 @@ def prepare_eeg_data(eeg_data: List[Dict[str, Any]], segment_size: int = SEGMENT
     """
     data = []
     for sample in eeg_data:
-        filtered_channel_data = np.array(
-            [sample['eeg'][channel] for channel in channel_list if channel in sample['eeg']])
+        if AVERAGE_CHANNELS_3:
+            # Average channels values to create only 3 channels (for RGB models)
+            sample_data = average_eeg_channels(sample)
+        else:
+            # Filter to specific channels
+            sample_data = np.array(
+                [sample['eeg'][channel] for channel in channel_list if channel in sample['eeg']])
         if segment:
-            filtered_channel_data = segment_signal(filtered_channel_data, segment_size, sampling_rate)
-        data.append({'data': filtered_channel_data, 'label': np.float32(label)})  # Add label from arg
+            sample_data = segment_signal(sample_data, segment_size, sampling_rate)
+        data.append({'segments': sample_data, 'label': np.float32(label)})  # Add label from arg
     return data
+
+
+def average_eeg_channels(sample, channel_groups=CHANNEL_GROUPS):
+    """
+    Averages the EEG channel values based on specified channel groups.
+
+    :param sample: Dictionary containing EEG data in the format
+                   {'id': 'filename.txt', 'eeg': {'F7': ndarray, 'F3': ndarray, ...}}
+    :type sample: dict
+    :param channel_groups: Two-dimensional array where each row contains the channel names of one averaging set.
+    :type channel_groups: list of list of str
+
+    :return: List of numpy arrays containing the averaged values for each channel group.
+    :rtype: list of ndarray
+    """
+    eeg_data = sample['eeg']
+    averaged_sets = []
+    for group in channel_groups:
+        averaged_set = np.mean([eeg_data[channel] for channel in group], axis=0)
+        averaged_sets.append(averaged_set)
+
+    return averaged_sets
 
 
 def segment_signal(signal: np.ndarray, segment_size: int, sampling_rate: int) -> np.ndarray:
@@ -81,9 +109,9 @@ def get_data(health_path, ill_path, segment=SEGMENT):
     for idx, signal in enumerate(signals_data):
         print(f"Processing: {idx}/{len(signals_data)}")
         if segment:
-            signal["data"] = preprocess_eeg_segmented_sample(signal["data"])
+            signal["segments"] = preprocess_eeg_segmented_sample(signal["segments"])
         else:
-            signal["data"] = preprocess_eeg_sample(signal["data"])
+            signal["segments"] = preprocess_eeg_sample(signal["segments"])
 
     return signals_data
 
@@ -175,9 +203,34 @@ def scale_minmax(X: np.ndarray, min: float = 0.0, max: float = 1.0) -> np.ndarra
     return X_scaled
 
 
-def create_eeg_dataset(data: List[Dict[str, np.ndarray]], batch_size: int, shuffle: bool = False,
-                       repeat: bool = True, segment_split: bool = SEGMENTS_SPLIT,
-                       data_shape=DATA_SAMPLE_SHAPE) -> tf.data.Dataset:
+def eeg_dataset(data):
+    segments = [segment for segment, label in data]
+    labels = [label for segment, label in data]
+    categorical_labels = to_categorical(labels, num_classes=2)
+    return tf.data.Dataset.from_tensor_slices((segments, categorical_labels))
+
+
+def eeg_dataset_generator(data, data_shape):
+    def generator():
+        for segment, label in data:
+            if NCHW_INPUT_FORMAT:
+                if len(segment.shape) == 4:
+                    segment = np.transpose(segment, (0, 3, 1, 2))
+                elif len(segment.shape) == 3:
+                    segment = np.transpose(segment, (2, 0, 1))
+            yield segment, to_categorical(label, num_classes=2)
+
+    output_signature = (
+        tf.TensorSpec(shape=data_shape, dtype=tf.float32),
+        tf.TensorSpec(shape=(2,), dtype=tf.float32)
+    )
+
+    return tf.data.Dataset.from_generator(generator, output_signature=output_signature)
+
+
+def create_eeg_dataset(data: List, batch_size: int, shuffle: bool = False,
+                       repeat: bool = False, data_shape=DATA_SAMPLE_SHAPE,
+                       generator: bool = False) -> tf.data.Dataset:
     """
     Creates a TensorFlow dataset from EEG data,
     where data contains already segmented signals and preprocessed into M-H distributions.
@@ -203,26 +256,11 @@ def create_eeg_dataset(data: List[Dict[str, np.ndarray]], batch_size: int, shuff
     Note:
         If `shuffle` is True, the dataset will be shuffled with a buffer size of 100.
     """
-    all_segments = []
-    for sample in data:
-        if segment_split:
-            for segment in sample["segments"]:
-                all_segments.append((segment, sample["label"]))
-        else:
-            all_segments.append((sample["segments"], sample["label"]))
-    if shuffle:
-        random.shuffle(all_segments)
+    if generator:
+        dataset = eeg_dataset_generator(data, data_shape)
+    else:
+        dataset = eeg_dataset(data)
 
-    def generator():
-        for segment, label in all_segments:
-            yield segment, to_categorical(label, num_classes=2)
-
-    output_signature = (
-        tf.TensorSpec(shape=data_shape, dtype=tf.float32),
-        tf.TensorSpec(shape=(2,), dtype=tf.float32)
-    )
-
-    dataset = tf.data.Dataset.from_generator(generator, output_signature=output_signature)
     if shuffle:
         dataset = dataset.shuffle(100)
     dataset = dataset.batch(batch_size)
